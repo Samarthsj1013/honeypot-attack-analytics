@@ -777,30 +777,46 @@ function App() {
 function Sidebar() {
   const [activeSection, setActiveSection] = useState("overview");
 
-  useEffect(() => {
-    const sections = [
-      "overview",
-      "threat-intelligence",
-      "credentials",
-      "attack-sources",
-    ];
+ useEffect(() => {
+  const sections = [
+    "overview",
+    "threat-intelligence",
+    "credentials",
+    "attack-sources",
+  ];
 
-    const handleHashChange = () => {
-      const hash = window.location.hash.replace("#", "");
+  const observers = sections.map((sectionId) => {
+    const element = document.getElementById(sectionId);
 
-      if (sections.includes(hash)) {
-        setActiveSection(hash);
+    if (!element) {
+      return null;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.find((entry) => entry.isIntersecting);
+
+        if (visible) {
+          setActiveSection(visible.target.id);
+        }
+      },
+      {
+        rootMargin: "-20% 0px -65% 0px",
+        threshold: 0,
       }
-    };
+    );
 
-    handleHashChange();
+    observer.observe(element);
 
-    window.addEventListener("hashchange", handleHashChange);
+    return observer;
+  });
 
-    return () => {
-      window.removeEventListener("hashchange", handleHashChange);
-    };
-  }, []);
+  return () => {
+    observers.forEach((observer) => {
+      observer?.disconnect();
+    });
+  };
+}, []);
 
   return (
     <aside className="sidebar">
