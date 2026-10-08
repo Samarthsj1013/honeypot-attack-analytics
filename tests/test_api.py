@@ -545,6 +545,138 @@ class TestAPI(unittest.TestCase):
             "Germany",
         )
 
+
+    def test_map_risk_matches_attacker_risk(self):
+        attackers = self.client.get(
+            "/api/attackers",
+            params={"limit": 25},
+        ).json()
+        points = self.client.get("/api/map").json()
+
+        attacker = next(
+            row for row in attackers if row["src_ip"] == "1.1.1.1"
+        )
+        point = next(
+            row for row in points if row["src_ip"] == "1.1.1.1"
+        )
+
+        self.assertAlmostEqual(
+            point["risk_score"],
+            attacker["risk_score"],
+        )
+        self.assertEqual(
+            point["risk_level"],
+            attacker["risk_level"],
+        )
+
+    def test_risk_level_counts_match_attackers(self):
+        attackers = self.client.get(
+            "/api/attackers",
+            params={"limit": 25},
+        ).json()
+        risk_rows = self.client.get("/api/risk-levels").json()
+
+        attacker_counts = {
+            "High": 0,
+            "Medium": 0,
+            "Low": 0,
+        }
+        for row in attackers:
+            attacker_counts[row["risk_level"]] += 1
+
+        api_counts = {
+            row["risk_level"]: row["ips"]
+            for row in risk_rows
+        }
+
+        self.assertEqual(
+            api_counts,
+            attacker_counts,
+        )
+
+    def test_overview_high_risk_ips_matches_risk_levels(self):
+        overview = self.client.get("/api/overview").json()
+        risk_rows = self.client.get("/api/risk-levels").json()
+
+        high_count = next(
+            row["ips"]
+            for row in risk_rows
+            if row["risk_level"] == "High"
+        )
+
+        self.assertEqual(
+            overview["high_risk_ips"],
+            high_count,
+        )
+
+    def test_attacker_profile_matches_attacker_summary(self):
+        summary_rows = self.client.get(
+            "/api/attackers",
+            params={"limit": 25},
+        ).json()
+        summary = next(
+            row
+            for row in summary_rows
+            if row["src_ip"] == "1.1.1.1"
+        )
+
+        profile = self.client.get(
+            "/api/attackers/1.1.1.1"
+        )
+
+        self.assertEqual(profile.status_code, 200)
+        profile = profile.json()
+
+        for field in (
+            "sessions",
+            "failed_logins",
+            "successful_sessions",
+            "commands",
+            "download_sessions",
+            "risk_level",
+        ):
+            self.assertEqual(
+                profile[field],
+                summary[field],
+            )
+
+        self.assertAlmostEqual(
+            profile["risk_score"],
+            summary["risk_score"],
+        )
+
+    def test_filtered_map_and_attackers_keep_same_risk(self):
+        params = {
+            "start": "2026-01-01",
+            "end": "2026-01-01",
+            "behavior": HUMAN,
+        }
+
+        attackers = self.client.get(
+            "/api/attackers",
+            params={**params, "limit": 25},
+        ).json()
+        points = self.client.get(
+            "/api/map",
+            params=params,
+        ).json()
+
+        self.assertEqual(len(attackers), 1)
+        self.assertEqual(len(points), 1)
+
+        self.assertEqual(
+            points[0]["src_ip"],
+            attackers[0]["src_ip"],
+        )
+        self.assertAlmostEqual(
+            points[0]["risk_score"],
+            attackers[0]["risk_score"],
+        )
+        self.assertEqual(
+            points[0]["risk_level"],
+            attackers[0]["risk_level"],
+        )
+
     def test_missing_database_returns_503(self):
         client = TestClient(
             create_app(
