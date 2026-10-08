@@ -920,6 +920,22 @@ function AttackerMap({ data, filters }) {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState("");
   useEffect(() => {
+  if (!selectedIp) {
+    return;
+  }
+
+  const attackerStillVisible = data.some(
+    (point) => point.src_ip === selectedIp
+  );
+
+  if (!attackerStillVisible) {
+    setSelectedIp(null);
+    setProfile(null);
+    setProfileError("");
+    setProfileLoading(false);
+  }
+}, [data, selectedIp]);
+  useEffect(() => {
     if (!selectedIp) {
       setProfile(null);
       setProfileError("");
