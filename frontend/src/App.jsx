@@ -240,7 +240,7 @@ function App() {
       <Sidebar />
       <main className="main-content">
         {/* HEADER */}
-        <header className="dashboard-header">
+        <header id="overview" className="dashboard-header">
           <div>
             <div className="eyebrow">
               SECURITY OPERATIONS
@@ -585,7 +585,7 @@ function App() {
           </Panel>
         </section>
         {/* BEHAVIOR + SOURCES */}
-        <section className="dashboard-grid two-columns">
+        <section id="threat-intelligence" className="dashboard-grid two-columns">
           <Panel
             title="Attack Behavior"
             subtitle="Session classification"
@@ -649,7 +649,7 @@ function App() {
           </Panel>
         </section>
         {/* CREDENTIAL INTELLIGENCE */}
-        <section className="dashboard-grid three-columns">
+        <section id="credentials" className="dashboard-grid three-columns">
           <CredentialPanel
             title="Top Usernames"
             subtitle="Most attempted usernames"
@@ -670,7 +670,7 @@ function App() {
           />
         </section>
         {/* ATTACKER MAP */}
-        <section className="dashboard-grid">
+        <section id="attack-sources" className="dashboard-grid">
           <Panel
             title="Attacker Origin Map"
             subtitle="Approximate geographic distribution of observed attack sources"
@@ -789,53 +789,53 @@ function Sidebar() {
           </div>
         </div>
       </div>
+
       <nav className="sidebar-nav">
         <SidebarItem
           icon={<Activity />}
           label="Overview"
+          href="#overview"
           active
         />
+
         <SidebarItem
           icon={<ShieldAlert />}
           label="Threat Intelligence"
+          href="#threat-intelligence"
         />
+
         <SidebarItem
           icon={<ChevronDown />}
           label="Credentials"
+          href="#credentials"
         />
+
         <SidebarItem
           icon={<Globe />}
           label="Attack Sources"
+          href="#attack-sources"
         />
       </nav>
+
       <div className="system-status">
         <div className="status-dot" />
         <div>
-          <strong>
-            System Online
-          </strong>
-          <span>
-            FastAPI connected
-          </span>
+          <strong>System Online</strong>
+          <span>FastAPI connected</span>
         </div>
       </div>
     </aside>
   );
 }
-function SidebarItem({
-  icon,
-  label,
-  active,
-}) {
+function SidebarItem({ icon, label, active, href }) {
   return (
-    <div
-      className={`sidebar-item ${
-        active ? "active" : ""
-      }`}
+    <a
+      className={`sidebar-item ${active ? "active" : ""}`}
+      href={href}
     >
       {icon}
       <span>{label}</span>
-    </div>
+    </a>
   );
 }
 /* =========================================================
