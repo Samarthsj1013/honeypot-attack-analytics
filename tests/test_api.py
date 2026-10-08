@@ -680,6 +680,75 @@ class TestAPI(unittest.TestCase):
             attackers[0]["risk_level"],
         )
 
+    def test_attacker_profile_respects_date_filter(self):
+        profile = self.client.get(
+            "/api/attackers/2.2.2.2",
+            params={
+                "start": "2026-01-02",
+                "end": "2026-01-02",
+            },
+        )
+
+        self.assertEqual(profile.status_code, 200)
+        data = profile.json()
+        self.assertEqual(data["sessions"], 1)
+        self.assertEqual(data["failed_logins"], 1)
+        self.assertEqual(data["successful_sessions"], 0)
+        self.assertEqual(data["commands"], 0)
+
+    def test_attacker_profile_respects_behavior_filter(self):
+        profile = self.client.get(
+            "/api/attackers/2.2.2.2",
+            params={"behavior": BOT},
+        )
+
+        self.assertEqual(profile.status_code, 200)
+        data = profile.json()
+        self.assertEqual(data["sessions"], 2)
+        self.assertEqual(data["failed_logins"], 4)
+        self.assertEqual(data["successful_sessions"], 0)
+
+    def test_attacker_profile_returns_404_when_ip_is_removed_by_filter(self):
+        profile = self.client.get(
+            "/api/attackers/1.1.1.1",
+            params={
+                "start": "2026-01-02",
+                "end": "2026-01-02",
+            },
+        )
+
+        self.assertEqual(profile.status_code, 404)
+
+    def test_attacker_profile_credentials_follow_filters(self):
+        profile = self.client.get(
+            "/api/attackers/2.2.2.2",
+            params={
+                "start": "2026-01-01",
+                "end": "2026-01-01",
+                "behavior": BOT,
+            },
+        )
+
+        self.assertEqual(profile.status_code, 200)
+        data = profile.json()
+
+        self.assertEqual(
+            data["usernames"],
+            [
+                {"value": "root", "count": 2},
+                {"value": "test", "count": 1},
+            ],
+        )
+        self.assertEqual(
+            data["passwords"],
+            [
+                {"value": "x", "count": 1},
+                {"value": "y", "count": 1},
+                {"value": "z", "count": 1},
+            ],
+        )
+        self.assertEqual(data["commands_top"], [])
+
     def test_missing_database_returns_503(self):
         client = TestClient(
             create_app(

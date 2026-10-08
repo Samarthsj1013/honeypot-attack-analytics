@@ -659,146 +659,127 @@ def attackers(df: pd.DataFrame, limit: int = 25) -> list[dict]:
     )
 
 def attacker_detail(src_ip: str, f: Filters, db_path=None) -> dict | None:
-
     """Detailed investigation profile for one attacker IP."""
-
     df = load_sessions(f, db_path)
 
-
-
     if df.empty:
-
         return None
-
-
 
     attacker = df[df["src_ip"] == src_ip].copy()
 
-
-
     if attacker.empty:
-
         return None
-
-
 
     risk = analysis.compute_ip_risk(attacker)
 
-
-
     if risk.empty:
-
         return None
-
-
 
     row = risk.iloc[0]
 
-
-
     behaviors = (
         attacker["behavior"]
-        .dropna()
+        .fillna("Unclustered")
         .value_counts()
         .to_dict()
     )
 
-    username_counts = (
-        attacker["username"]
-        .dropna()
-        .astype(str)
-        .value_counts()
-        .head(10)
-        if "username" in attacker.columns
-        else pd.Series(dtype=int)
+    def top_for_ip(
+        column: str,
+        event_condition: str,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Return event-level credentials/commands for this attacker."""
+        clauses, params = _filters(f, "e.timestamp")
+
+        where_parts = [
+            "e.src_ip = ?",
+            event_condition,
+            f"e.{column} IS NOT NULL",
+            *clauses,
+        ]
+
+        params = [src_ip, *params]
+        where = " AND ".join(where_parts)
+
+        result = database.query(
+            f"""
+            SELECT
+                e.{column} AS value,
+                COUNT(*) AS count
+            FROM events e
+            LEFT JOIN session_clusters c
+                ON e.session = c.session
+            WHERE {where}
+            GROUP BY e.{column}
+            ORDER BY count DESC, value
+            LIMIT ?
+            """,
+            (*params, limit),
+            db_path,
+        )
+
+        return records(result)
+
+    usernames = top_for_ip(
+        "username",
+        f"e.eventid IN {LOGIN_EVENTS}",
     )
 
-    usernames = [
-        {"value": value, "count": int(count)}
-        for value, count in username_counts.items()
-    ]
-
-    password_counts = (
-        attacker["password"]
-        .dropna()
-        .astype(str)
-        .value_counts()
-        .head(10)
-        if "password" in attacker.columns
-        else pd.Series(dtype=int)
+    passwords = top_for_ip(
+        "password",
+        f"e.eventid IN {LOGIN_EVENTS}",
     )
 
-    passwords = [
-        {"value": value, "count": int(count)}
-        for value, count in password_counts.items()
-    ]
-
-    command_counts = (
-        attacker["command"]
-        .dropna()
-        .astype(str)
-        .value_counts()
-        .head(10)
-        if "command" in attacker.columns
-        else pd.Series(dtype=int)
+    commands_top = top_for_ip(
+        "command",
+        "e.eventid = 'cowrie.command.input'",
     )
-
-    commands_top = [
-        {"value": value, "count": int(count)}
-        for value, count in command_counts.items()
-    ]
 
     return {
-
-        "src_ip": src_ip,
-
-        "country": attacker["country"].iloc[0],
-
-        "city": attacker["city"].iloc[0],
-
-        "latitude": attacker["latitude"].iloc[0],
-
-        "longitude": attacker["longitude"].iloc[0],
-
-
-
+        "src_ip": str(src_ip),
+        "country": (
+            attacker["country"].iloc[0]
+            if "country" in attacker.columns
+            else "Unknown"
+        ),
+        "city": (
+            attacker["city"].iloc[0]
+            if "city" in attacker.columns
+            else None
+        ),
+        "latitude": (
+            attacker["latitude"].iloc[0]
+            if "latitude" in attacker.columns
+            else None
+        ),
+        "longitude": (
+            attacker["longitude"].iloc[0]
+            if "longitude" in attacker.columns
+            else None
+        ),
+        "behavior": (
+            max(behaviors, key=behaviors.get)
+            if behaviors
+            else "Unclustered"
+        ),
         "sessions": int(row["sessions"]),
-
         "failed_logins": int(row["failed_logins"]),
-
         "successful_sessions": int(row["successful_sessions"]),
-
         "commands": int(row["commands"]),
-
         "download_sessions": int(row["download_sessions"]),
-
-
-
         "risk_score": float(row["risk_score"]),
-
-        "risk_level": row["risk_level"],
-
-
-
-        "behaviors": behaviors,
-
-
-
+        "risk_level": str(row["risk_level"]),
+        "behaviors": {
+            str(key): int(value)
+            for key, value in behaviors.items()
+        },
         "usernames": usernames,
-
         "passwords": passwords,
-
         "commands_top": commands_top,
-
-
-
-        "first_seen": attacker["start_time"].min(),
-
-        "last_seen": attacker["start_time"].max(),
-
+        "first_seen": str(attacker["start_time"].min()),
+        "last_seen": str(attacker["start_time"].max()),
     }
-
-
 
 
 
