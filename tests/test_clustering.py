@@ -1,4 +1,5 @@
 """Tests for clustering and risk scoring.
+
 Run: python -m unittest discover -s tests
 """
 
@@ -8,11 +9,11 @@ import numpy as np
 import pandas as pd
 
 from src import clustering
-from src.analysis import compute_ip_risk
+from src.analysis import compute_attacker_dna, compute_ip_risk
 
 
 def make_sessions() -> pd.DataFrame:
-    """60+ synthetic sessions: 30 scanners, 30 bots, 20 humans."""
+    """80 synthetic sessions: 30 scanners, 30 bots, 20 humans."""
     rng = np.random.RandomState(0)
     rows = []
 
@@ -211,6 +212,7 @@ class TestClustering(unittest.TestCase):
         twenty["session"] = [f"p{i}" for i in range(20)]
 
         risk = compute_ip_risk(twenty).iloc[0]
+
         self.assertEqual(risk["sessions"], 20)
         self.assertAlmostEqual(risk["risk_score"], 20.0)
 
@@ -218,6 +220,7 @@ class TestClustering(unittest.TestCase):
         twenty_one["session"] = [f"p{i}" for i in range(21)]
 
         risk = compute_ip_risk(twenty_one).iloc[0]
+
         self.assertEqual(risk["sessions"], 21)
         self.assertAlmostEqual(risk["risk_score"], 20.0)
 
@@ -333,6 +336,102 @@ class TestClustering(unittest.TestCase):
 
         self.assertAlmostEqual(risk["risk_score"], 100.0)
         self.assertEqual(risk["risk_level"], "High")
+
+    def test_attacker_dna_single_session(self):
+        data = make_sessions().head(1).copy()
+        data["src_ip"] = "192.0.2.90"
+        data["n_failed_logins"] = 2
+        data["login_success"] = 1
+        data["n_commands"] = 1
+        data["has_download_cmd"] = 1
+
+        dna = compute_attacker_dna(data).iloc[0]
+
+        self.assertEqual(dna["src_ip"], "192.0.2.90")
+        self.assertEqual(dna["sessions"], 1)
+        self.assertEqual(dna["failed_logins"], 2)
+        self.assertEqual(dna["successful_sessions"], 1)
+        self.assertEqual(dna["commands"], 1)
+        self.assertEqual(dna["download_sessions"], 1)
+
+        self.assertAlmostEqual(dna["login_rate"], 100.0)
+        self.assertAlmostEqual(dna["command_rate"], 100.0)
+        self.assertAlmostEqual(dna["download_rate"], 100.0)
+        self.assertAlmostEqual(dna["persistence"], 100.0)
+        self.assertAlmostEqual(dna["activity"], 100.0)
+
+        for tag in ("BF", "AUTH", "CMD", "DL", "PERSIST"):
+            self.assertIn(tag, dna["fingerprint"])
+
+    def test_attacker_dna_multiple_ips_is_normalized(self):
+        rows = []
+
+        base = make_sessions().head(1).copy()
+
+        for i in range(2):
+            row = base.copy()
+            row["src_ip"] = "192.0.2.100"
+            row["session"] = f"a{i}"
+            row["n_failed_logins"] = 10
+            row["login_success"] = 0
+            row["n_commands"] = 2
+            row["has_download_cmd"] = 0
+            rows.append(row)
+
+        for i in range(4):
+            row = base.copy()
+            row["src_ip"] = "192.0.2.101"
+            row["session"] = f"b{i}"
+            row["n_failed_logins"] = 20
+            row["login_success"] = 1
+            row["n_commands"] = 4
+            row["has_download_cmd"] = 1
+            rows.append(row)
+
+        data = pd.concat(rows, ignore_index=True)
+        dna = compute_attacker_dna(data)
+
+        first = dna[dna["src_ip"] == "192.0.2.100"].iloc[0]
+        second = dna[dna["src_ip"] == "192.0.2.101"].iloc[0]
+
+        self.assertAlmostEqual(first["persistence"], 50.0)
+        self.assertAlmostEqual(second["persistence"], 100.0)
+
+        self.assertAlmostEqual(first["login_rate"], 0.0)
+        self.assertAlmostEqual(second["login_rate"], 100.0)
+
+        self.assertAlmostEqual(first["command_rate"], 200.0)
+        self.assertAlmostEqual(second["command_rate"], 400.0)
+
+        self.assertAlmostEqual(first["download_rate"], 0.0)
+        self.assertAlmostEqual(second["download_rate"], 100.0)
+
+        self.assertAlmostEqual(first["activity"], 25.0)
+        self.assertAlmostEqual(second["activity"], 100.0)
+
+    def test_attacker_dna_empty_input(self):
+        dna = compute_attacker_dna(
+            pd.DataFrame()
+        )
+
+        self.assertTrue(dna.empty)
+        self.assertEqual(
+            list(dna.columns),
+            [
+                "src_ip",
+                "sessions",
+                "failed_logins",
+                "successful_sessions",
+                "commands",
+                "download_sessions",
+                "login_rate",
+                "command_rate",
+                "download_rate",
+                "persistence",
+                "activity",
+                "fingerprint",
+            ],
+        )
 
 
 if __name__ == "__main__":
