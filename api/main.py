@@ -18,7 +18,6 @@ from api import service
 from api.service import Filters
 
 
-# Origins allowed to call the API (the React dev server)
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -27,7 +26,6 @@ ALLOWED_ORIGINS = [
 
 def create_app(db_path=None) -> FastAPI:
     """App factory so tests can point the API at a temporary database."""
-
     app = FastAPI(
         title="Honeypot Attack Analytics API",
         version="1.0.0",
@@ -70,10 +68,6 @@ def create_app(db_path=None) -> FastAPI:
                 ),
             )
 
-    # ---------------------------------------------------------
-    # Health
-    # ---------------------------------------------------------
-
     @app.get("/health")
     def health() -> dict:
         missing = service.missing_tables(db_path)
@@ -84,42 +78,24 @@ def create_app(db_path=None) -> FastAPI:
             "missing_tables": sorted(missing),
         }
 
-    # ---------------------------------------------------------
-    # API Router
-    # ---------------------------------------------------------
-
     router = APIRouter(
         prefix="/api",
         dependencies=[Depends(require_db)],
     )
 
-    # ---------------------------------------------------------
-    # Meta
-    # ---------------------------------------------------------
-
     @router.get("/meta")
     def meta() -> dict:
         return service.meta(db_path)
 
-    # ---------------------------------------------------------
-    # Overview
-    # ---------------------------------------------------------
-
     @router.get("/overview")
-    def overview(
-        f: Filters = Depends(get_filters),
-    ) -> dict:
+    def overview(f: Filters = Depends(get_filters)) -> dict:
         sessions = service.load_sessions(f, db_path)
         total_events = service.event_count(f, db_path)
 
         return service.overview(
             sessions,
-            total_events,
+            total_events=total_events,
         )
-
-    # ---------------------------------------------------------
-    # Timeline
-    # ---------------------------------------------------------
 
     @router.get("/timeline")
     def timeline(
@@ -129,10 +105,6 @@ def create_app(db_path=None) -> FastAPI:
             service.load_sessions(f, db_path)
         )
 
-    # ---------------------------------------------------------
-    # Hourly Activity
-    # ---------------------------------------------------------
-
     @router.get("/hourly")
     def hourly(
         f: Filters = Depends(get_filters),
@@ -141,10 +113,6 @@ def create_app(db_path=None) -> FastAPI:
             service.load_sessions(f, db_path)
         )
 
-    # ---------------------------------------------------------
-    # Attack Behaviors
-    # ---------------------------------------------------------
-
     @router.get("/behaviors")
     def behaviors(
         f: Filters = Depends(get_filters),
@@ -152,10 +120,6 @@ def create_app(db_path=None) -> FastAPI:
         return service.behaviors(
             service.load_sessions(f, db_path)
         )
-
-    # ---------------------------------------------------------
-    # Countries
-    # ---------------------------------------------------------
 
     @router.get("/countries")
     def countries(
@@ -167,10 +131,6 @@ def create_app(db_path=None) -> FastAPI:
             limit,
         )
 
-    # ---------------------------------------------------------
-    # Attacker Origin Map
-    # ---------------------------------------------------------
-
     @router.get("/map")
     def map_points(
         f: Filters = Depends(get_filters),
@@ -178,10 +138,6 @@ def create_app(db_path=None) -> FastAPI:
         return service.map_points(
             service.load_sessions(f, db_path)
         )
-
-    # ---------------------------------------------------------
-    # Top Attackers
-    # ---------------------------------------------------------
 
     @router.get("/attackers")
     def attackers(
@@ -193,19 +149,11 @@ def create_app(db_path=None) -> FastAPI:
             limit,
         )
 
-    # ---------------------------------------------------------
-    # Individual Attacker Profile
-    # ---------------------------------------------------------
-
     @router.get("/attackers/{src_ip}")
     def attacker_profile(
         src_ip: str,
         f: Filters = Depends(get_filters),
     ) -> dict:
-
-        # IMPORTANT:
-        # service.py currently exposes attacker_detail(),
-        # not attacker_profile().
         profile = service.attacker_detail(
             src_ip,
             f,
@@ -220,10 +168,6 @@ def create_app(db_path=None) -> FastAPI:
 
         return profile
 
-    # ---------------------------------------------------------
-    # Risk Levels
-    # ---------------------------------------------------------
-
     @router.get("/risk-levels")
     def risk_levels(
         f: Filters = Depends(get_filters),
@@ -231,10 +175,6 @@ def create_app(db_path=None) -> FastAPI:
         return service.risk_levels(
             service.load_sessions(f, db_path)
         )
-
-    # ---------------------------------------------------------
-    # Credentials
-    # ---------------------------------------------------------
 
     @router.get("/credentials")
     def credentials(
@@ -249,7 +189,6 @@ def create_app(db_path=None) -> FastAPI:
             db_path,
         )
 
-    # Register router
     app.include_router(router)
 
     return app

@@ -246,6 +246,7 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(data["unique_ips"], 3)
         self.assertEqual(data["failed_logins"], 6)
         self.assertEqual(data["successful_sessions"], 1)
+        self.assertEqual(data["total_events"], 16)
 
     def test_behavior_filter(self):
         r = self.client.get(
@@ -291,6 +292,7 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(r.json()["sessions"], 1)
         self.assertEqual(r.json()["unique_ips"], 1)
         self.assertEqual(r.json()["failed_logins"], 1)
+        self.assertEqual(r.json()["total_events"], 3)
 
     def test_start_date_only_filter(self):
         r = self.client.get(
@@ -324,6 +326,7 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(r.json()["sessions"], 1)
         self.assertEqual(r.json()["unique_ips"], 1)
         self.assertEqual(r.json()["failed_logins"], 3)
+        self.assertEqual(r.json()["total_events"], 5)
 
     def test_bad_date_range_rejected(self):
         r = self.client.get(
