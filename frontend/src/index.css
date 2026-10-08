@@ -1533,6 +1533,21 @@ tbody tr:last-child td {
   white-space: nowrap;
 
 }
+.sidebar-item,
+.sidebar-item:visited {
+  color: #a8b7ca;
+  text-decoration: none;
+}
+
+.sidebar-item:hover {
+  color: #cbd5e1;
+  text-decoration: none;
+}
+
+.sidebar-item.active {
+  color: #38bdf8;
+  text-decoration: none;
+}
 
 .sidebar-item svg {
 
@@ -2885,3 +2900,4 @@ button {
   }
 
 }
+
