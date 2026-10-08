@@ -10,25 +10,17 @@ from dataclasses import dataclass
 
 from pathlib import Path
 
-
-
 import pandas as pd
-
-
 
 import config
 
 from src import analysis, database
-
-
 
 REQUIRED_TABLES = {"events", "sessions", "ip_intel", "session_clusters"}
 
 BEHAVIOR_EXPR = "COALESCE(c.behavior, 'Unclustered')"
 
 LOGIN_EVENTS = "('cowrie.login.failed', 'cowrie.login.success')"
-
-
 
 # kind -> (events column, event-type condition). Fixed constants, never user input.
 
@@ -41,8 +33,6 @@ CREDENTIAL_KINDS = {
     "command": ("command", "e.eventid = 'cowrie.command.input'"),
 
 }
-
-
 
 RISK_COLUMNS = [
 
@@ -64,10 +54,6 @@ RISK_COLUMNS = [
 
 ]
 
-
-
-
-
 @dataclass
 
 class Filters:
@@ -77,10 +63,6 @@ class Filters:
     end: str | None = None              # "YYYY-MM-DD", inclusive
 
     behaviors: list[str] | None = None  # None = all behaviors
-
-
-
-
 
 def records(df: pd.DataFrame) -> list[dict]:
 
@@ -92,23 +74,15 @@ def records(df: pd.DataFrame) -> list[dict]:
 
     return df.astype(object).where(df.notna(), None).to_dict("records")
 
-
-
-
-
 def missing_tables(db_path=None) -> set:
 
     """Tables the API needs that are not in the database (all of them if no DB)."""
 
     path = Path(db_path) if db_path else config.DB_PATH
 
-
-
     if not path.exists():
 
         return set(REQUIRED_TABLES)
-
-
 
     present = set(
 
@@ -122,13 +96,7 @@ def missing_tables(db_path=None) -> set:
 
     )
 
-
-
     return REQUIRED_TABLES - present
-
-
-
-
 
 def _filters(f: Filters, ts_col: str) -> tuple[list[str], list]:
 
@@ -136,23 +104,17 @@ def _filters(f: Filters, ts_col: str) -> tuple[list[str], list]:
 
     clauses, params = [], []
 
-
-
     if f.start:
 
         clauses.append(f"date({ts_col}) >= ?")
 
         params.append(f.start)
 
-
-
     if f.end:
 
         clauses.append(f"date({ts_col}) <= ?")
 
         params.append(f.end)
-
-
 
     if f.behaviors is not None:
 
@@ -168,13 +130,7 @@ def _filters(f: Filters, ts_col: str) -> tuple[list[str], list]:
 
             clauses.append("1 = 0")
 
-
-
     return clauses, params
-
-
-
-
 
 def load_sessions(f: Filters, db_path=None) -> pd.DataFrame:
 
@@ -183,8 +139,6 @@ def load_sessions(f: Filters, db_path=None) -> pd.DataFrame:
     clauses, params = _filters(f, "s.start_time")
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-
-
 
     return database.query(
 
@@ -218,10 +172,6 @@ def load_sessions(f: Filters, db_path=None) -> pd.DataFrame:
 
     )
 
-
-
-
-
 def meta(db_path=None) -> dict:
 
     """Info the frontend needs to build its filters (ignores filters itself)."""
@@ -237,8 +187,6 @@ def meta(db_path=None) -> dict:
         db_path=db_path,
 
     ).iloc[0]
-
-
 
     behaviors = database.query(
 
@@ -258,8 +206,6 @@ def meta(db_path=None) -> dict:
 
     )["behavior"].tolist()
 
-
-
     geo = database.query(
 
         "SELECT COUNT(*) AS n FROM ip_intel WHERE latitude IS NOT NULL",
@@ -267,8 +213,6 @@ def meta(db_path=None) -> dict:
         db_path=db_path,
 
     ).iloc[0]["n"]
-
-
 
     return {
 
@@ -284,15 +228,9 @@ def meta(db_path=None) -> dict:
 
     }
 
-
-
-
-
 def event_count(f: Filters, db_path=None) -> int:
 
     clauses, params = _filters(f, "e.timestamp")
-
-
 
     where = (
 
@@ -303,8 +241,6 @@ def event_count(f: Filters, db_path=None) -> int:
         else ""
 
     )
-
-
 
     df = database.query(
 
@@ -328,19 +264,11 @@ def event_count(f: Filters, db_path=None) -> int:
 
     )
 
-
-
     if df.empty:
 
         return 0
 
-
-
     return int(df.iloc[0]["total_events"])
-
-
-
-
 
 def risk_table(df: pd.DataFrame) -> pd.DataFrame:
 
@@ -348,13 +276,7 @@ def risk_table(df: pd.DataFrame) -> pd.DataFrame:
 
         return pd.DataFrame(columns=RISK_COLUMNS)
 
-
-
     return analysis.compute_ip_risk(df)
-
-
-
-
 
 def overview(df: pd.DataFrame, total_events: int = 0) -> dict:
 
@@ -380,11 +302,7 @@ def overview(df: pd.DataFrame, total_events: int = 0) -> dict:
 
         }
 
-
-
     risk = risk_table(df)
-
-
 
     return {
 
@@ -406,10 +324,6 @@ def overview(df: pd.DataFrame, total_events: int = 0) -> dict:
 
     }
 
-
-
-
-
 def timeline(df: pd.DataFrame) -> list[dict]:
 
     """Sessions per day, split by behavior."""
@@ -417,8 +331,6 @@ def timeline(df: pd.DataFrame) -> list[dict]:
     if df.empty:
 
         return []
-
-
 
     d = (
 
@@ -434,13 +346,7 @@ def timeline(df: pd.DataFrame) -> list[dict]:
 
     )
 
-
-
     return records(d)
-
-
-
-
 
 def hourly(df: pd.DataFrame) -> list[dict]:
 
@@ -456,11 +362,7 @@ def hourly(df: pd.DataFrame) -> list[dict]:
 
     )
 
-
-
     counts = counts.reindex(range(24), fill_value=0)
-
-
 
     return [
 
@@ -470,10 +372,6 @@ def hourly(df: pd.DataFrame) -> list[dict]:
 
     ]
 
-
-
-
-
 def behaviors(df: pd.DataFrame) -> list[dict]:
 
     """Average behavior per cluster, plus each cluster's share of sessions."""
@@ -481,8 +379,6 @@ def behaviors(df: pd.DataFrame) -> list[dict]:
     if df.empty:
 
         return []
-
-
 
     prof = (
 
@@ -508,15 +404,11 @@ def behaviors(df: pd.DataFrame) -> list[dict]:
 
     )
 
-
-
     prof["share_pct"] = (
 
         prof["sessions"] / prof["sessions"].sum() * 100
 
     ).round(1)
-
-
 
     return records(
 
@@ -524,17 +416,11 @@ def behaviors(df: pd.DataFrame) -> list[dict]:
 
     )
 
-
-
-
-
 def countries(df: pd.DataFrame, limit: int = 10) -> list[dict]:
 
     if df.empty:
 
         return []
-
-
 
     d = (
 
@@ -558,13 +444,7 @@ def countries(df: pd.DataFrame, limit: int = 10) -> list[dict]:
 
     )
 
-
-
     return records(d)
-
-
-
-
 
 def map_points(df: pd.DataFrame) -> list[dict]:
 
@@ -572,13 +452,9 @@ def map_points(df: pd.DataFrame) -> list[dict]:
 
     geo = df.dropna(subset=["latitude", "longitude"])
 
-
-
     if geo.empty:
 
         return []
-
-
 
     g = (
 
@@ -606,25 +482,15 @@ def map_points(df: pd.DataFrame) -> list[dict]:
 
     )
 
-
-
     risk = risk_table(df)[
 
         ["src_ip", "risk_score", "risk_level"]
 
     ]
 
-
-
     g = g.merge(risk, on="src_ip", how="left")
 
-
-
     return records(g)
-
-
-
-
 
 def attackers(df: pd.DataFrame, limit: int = 25) -> list[dict]:
 
@@ -632,13 +498,9 @@ def attackers(df: pd.DataFrame, limit: int = 25) -> list[dict]:
 
     risk = risk_table(df)
 
-
-
     if risk.empty:
 
         return []
-
-
 
     country = (
 
@@ -650,8 +512,6 @@ def attackers(df: pd.DataFrame, limit: int = 25) -> list[dict]:
 
     )
 
-
-
     return records(
 
         risk.merge(country, on="src_ip", how="left").head(limit)
@@ -659,152 +519,240 @@ def attackers(df: pd.DataFrame, limit: int = 25) -> list[dict]:
     )
 
 def attacker_detail(src_ip: str, f: Filters, db_path=None) -> dict | None:
+
     """Detailed investigation profile for one attacker IP."""
+
     df = load_sessions(f, db_path)
 
     if df.empty:
+
         return None
 
     attacker = df[df["src_ip"] == src_ip].copy()
 
     if attacker.empty:
+
         return None
 
     risk = analysis.compute_ip_risk(attacker)
 
     if risk.empty:
+
         return None
 
     row = risk.iloc[0]
 
     behaviors = (
+
         attacker["behavior"]
+
         .fillna("Unclustered")
+
         .value_counts()
+
         .to_dict()
+
     )
 
     def top_for_ip(
+
         column: str,
+
         event_condition: str,
+
         limit: int = 10,
+
     ) -> list[dict]:
+
         """Return event-level credentials/commands for this attacker."""
+
         clauses, params = _filters(f, "e.timestamp")
 
         where_parts = [
+
             "e.src_ip = ?",
+
             event_condition,
+
             f"e.{column} IS NOT NULL",
+
             *clauses,
+
         ]
 
         params = [src_ip, *params]
+
         where = " AND ".join(where_parts)
 
         result = database.query(
+
             f"""
+
             SELECT
+
                 e.{column} AS value,
+
                 COUNT(*) AS count
+
             FROM events e
+
             LEFT JOIN session_clusters c
+
                 ON e.session = c.session
+
             WHERE {where}
+
             GROUP BY e.{column}
+
             ORDER BY count DESC, value
+
             LIMIT ?
+
             """,
+
             (*params, limit),
+
             db_path,
+
         )
 
         return records(result)
 
     usernames = top_for_ip(
+
         "username",
+
         f"e.eventid IN {LOGIN_EVENTS}",
+
     )
 
     passwords = top_for_ip(
+
         "password",
+
         f"e.eventid IN {LOGIN_EVENTS}",
+
     )
 
     commands_top = top_for_ip(
+
         "command",
+
         "e.eventid = 'cowrie.command.input'",
+
     )
 
     return {
+
         "src_ip": str(src_ip),
+
         "country": (
+
             attacker["country"].iloc[0]
+
             if "country" in attacker.columns
+
             else "Unknown"
+
         ),
+
         "city": (
+
             attacker["city"].iloc[0]
+
             if "city" in attacker.columns
+
             else None
+
         ),
+
         "latitude": (
+
             attacker["latitude"].iloc[0]
+
             if "latitude" in attacker.columns
+
             else None
+
         ),
+
         "longitude": (
+
             attacker["longitude"].iloc[0]
+
             if "longitude" in attacker.columns
+
             else None
+
         ),
+
         "behavior": (
+
             max(behaviors, key=behaviors.get)
+
             if behaviors
+
             else "Unclustered"
+
         ),
+
         "sessions": int(row["sessions"]),
+
         "failed_logins": int(row["failed_logins"]),
+
         "successful_sessions": int(row["successful_sessions"]),
+
         "commands": int(row["commands"]),
+
         "download_sessions": int(row["download_sessions"]),
+
         "risk_score": float(row["risk_score"]),
+
         "risk_level": str(row["risk_level"]),
+
         "behaviors": {
+
             str(key): int(value)
+
             for key, value in behaviors.items()
+
         },
+
         "usernames": usernames,
+
         "passwords": passwords,
+
         "commands_top": commands_top,
+
         "first_seen": str(attacker["start_time"].min()),
+
         "last_seen": str(attacker["start_time"].max()),
+
     }
 
 def attacker_dna(src_ip: str, f: Filters, db_path=None) -> dict | None:
     df = load_sessions(f, db_path)
-
     if df.empty:
         return None
 
-    attacker = df[df["src_ip"] == src_ip].copy()
-
-    if attacker.empty:
+    if src_ip not in set(df["src_ip"].astype(str)):
         return None
 
-    dna = analysis.compute_attacker_dna(attacker)
-
+    # Compute DNA across all attackers under the current filters so
+    # persistence and activity are normalized relative to the full dataset.
+    dna = analysis.compute_attacker_dna(df)
     if dna.empty:
         return None
 
-    return records(dna)[0]
+    attacker_dna_row = dna[dna["src_ip"].astype(str) == str(src_ip)]
+    if attacker_dna_row.empty:
+        return None
 
+    return records(attacker_dna_row)[0]
 
 def risk_levels(df: pd.DataFrame) -> list[dict]:
 
     risk = risk_table(df)
-
-
 
     counts = (
 
@@ -822,8 +770,6 @@ def risk_levels(df: pd.DataFrame) -> list[dict]:
 
     )
 
-
-
     return [
 
         {"risk_level": k, "ips": int(v)}
@@ -831,10 +777,6 @@ def risk_levels(df: pd.DataFrame) -> list[dict]:
         for k, v in counts.items()
 
     ]
-
-
-
-
 
 def top_values(
 
@@ -852,19 +794,13 @@ def top_values(
 
     column, base = CREDENTIAL_KINDS[kind]
 
-
-
     clauses, params = _filters(f, "e.timestamp")
-
-
 
     where = " AND ".join(
 
         [base, f"e.{column} IS NOT NULL"] + clauses
 
     )
-
-
 
     df = database.query(
 
@@ -892,7 +828,4 @@ def top_values(
 
     )
 
-
-
     return records(df)
-

@@ -835,8 +835,8 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(data["command_rate"], 100.0)
         self.assertEqual(data["download_rate"], 100.0)
 
-        self.assertEqual(data["persistence"], 100.0)
-        self.assertEqual(data["activity"], 100.0)
+        self.assertEqual(data["persistence"], 50.0)
+        self.assertEqual(data["activity"], 75.0)
 
         self.assertIn("BF", data["fingerprint"])
         self.assertIn("AUTH", data["fingerprint"])
