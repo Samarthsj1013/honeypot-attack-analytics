@@ -6,7 +6,7 @@ import {
   Activity,
   AlertTriangle,
   Bot,
-  ChevronDown,
+  KeyRound,
   Globe,
   Shield,
   ShieldAlert,
@@ -836,7 +836,7 @@ function Sidebar() {
         />
 
         <SidebarItem
-          icon={<ChevronDown />}
+          icon={<KeyRound />}
           label="Credentials"
           href="#credentials"
           active={activeSection === "credentials"}
