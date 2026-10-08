@@ -773,17 +773,47 @@ function App() {
 /* =========================================================
    SIDEBAR
    ========================================================= */
+
 function Sidebar() {
+  const [activeSection, setActiveSection] = useState("overview");
+
+  useEffect(() => {
+    const sections = [
+      "overview",
+      "threat-intelligence",
+      "credentials",
+      "attack-sources",
+    ];
+
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace("#", "");
+
+      if (sections.includes(hash)) {
+        setActiveSection(hash);
+      }
+    };
+
+    handleHashChange();
+
+    window.addEventListener("hashchange", handleHashChange);
+
+    return () => {
+      window.removeEventListener("hashchange", handleHashChange);
+    };
+  }, []);
+
   return (
     <aside className="sidebar">
       <div className="brand">
         <div className="brand-icon">
           <Shield />
         </div>
+
         <div>
           <div className="brand-title">
             Honeypot
           </div>
+
           <div className="brand-subtitle">
             Attack Analytics
           </div>
@@ -795,30 +825,34 @@ function Sidebar() {
           icon={<Activity />}
           label="Overview"
           href="#overview"
-          active
+          active={activeSection === "overview"}
         />
 
         <SidebarItem
           icon={<ShieldAlert />}
           label="Threat Intelligence"
           href="#threat-intelligence"
+          active={activeSection === "threat-intelligence"}
         />
 
         <SidebarItem
           icon={<ChevronDown />}
           label="Credentials"
           href="#credentials"
+          active={activeSection === "credentials"}
         />
 
         <SidebarItem
           icon={<Globe />}
           label="Attack Sources"
           href="#attack-sources"
+          active={activeSection === "attack-sources"}
         />
       </nav>
 
       <div className="system-status">
         <div className="status-dot" />
+
         <div>
           <strong>System Online</strong>
           <span>FastAPI connected</span>
@@ -827,6 +861,7 @@ function Sidebar() {
     </aside>
   );
 }
+
 function SidebarItem({ icon, label, active, href }) {
   return (
     <a
@@ -838,6 +873,7 @@ function SidebarItem({ icon, label, active, href }) {
     </a>
   );
 }
+
 /* =========================================================
    PANEL
    ========================================================= */
