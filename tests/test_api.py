@@ -1,4 +1,5 @@
 """API tests against a small temporary database (no real data needed).
+
 Run: python -m unittest discover -s tests
 """
 
@@ -15,6 +16,7 @@ from src import analysis, database
 from src.parser import parse_log_file
 from src.sessionizer import build_sessions
 
+
 BOT = "Brute-force Bot"
 HUMAN = "Interactive / Human-like"
 SCANNER = "Scanner / Recon"
@@ -27,16 +29,24 @@ def ev(eventid, ts, ip, sid, **extra):
         "src_ip": ip,
         "session": sid,
     }
+
     base.update(extra)
+
     return json.dumps(base)
 
 
 D1 = "2026-01-01T10:00:"
 D2 = "2026-01-02T10:00:"
 
+
 LINES = [
     # s1: 1.1.1.1 got in and ran a download command (Jan 1)
-    ev("cowrie.session.connect", D1 + "00.000Z", "1.1.1.1", "s1"),
+    ev(
+        "cowrie.session.connect",
+        D1 + "00.000Z",
+        "1.1.1.1",
+        "s1",
+    ),
     ev(
         "cowrie.login.failed",
         D1 + "01.000Z",
@@ -77,7 +87,12 @@ LINES = [
     ),
 
     # s2: 2.2.2.2 brute-force (Jan 1)
-    ev("cowrie.session.connect", D1 + "10.000Z", "2.2.2.2", "s2"),
+    ev(
+        "cowrie.session.connect",
+        D1 + "10.000Z",
+        "2.2.2.2",
+        "s2",
+    ),
     ev(
         "cowrie.login.failed",
         D1 + "11.000Z",
@@ -111,7 +126,12 @@ LINES = [
     ),
 
     # s3: 2.2.2.2 again (Jan 2)
-    ev("cowrie.session.connect", D2 + "00.000Z", "2.2.2.2", "s3"),
+    ev(
+        "cowrie.session.connect",
+        D2 + "00.000Z",
+        "2.2.2.2",
+        "s3",
+    ),
     ev(
         "cowrie.login.failed",
         D2 + "01.000Z",
@@ -129,7 +149,12 @@ LINES = [
     ),
 
     # s4: 3.3.3.3 scanner (Jan 1)
-    ev("cowrie.session.connect", D1 + "20.000Z", "3.3.3.3", "s4"),
+    ev(
+        "cowrie.session.connect",
+        D1 + "20.000Z",
+        "3.3.3.3",
+        "s4",
+    ),
     ev(
         "cowrie.session.closed",
         D1 + "21.000Z",
@@ -143,6 +168,7 @@ LINES = [
 class TestAPI(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
+
         base = Path(self.tmp.name)
         self.db = base / "test.db"
         log = base / "log.json"
@@ -159,10 +185,12 @@ class TestAPI(unittest.TestCase):
             reset=True,
             db_path=self.db,
         )
+
         database.load_events(
             events,
             db_path=self.db,
         )
+
         database.load_sessions(
             sessions,
             db_path=self.db,
@@ -196,6 +224,7 @@ class TestAPI(unittest.TestCase):
                 },
             ]
         )
+
         database.load_ip_intel(
             intel,
             db_path=self.db,
@@ -360,6 +389,7 @@ class TestAPI(unittest.TestCase):
             sum(row["sessions"] for row in timeline),
             1,
         )
+
         self.assertEqual(
             timeline[0]["day"],
             "2026-01-02",
@@ -375,6 +405,7 @@ class TestAPI(unittest.TestCase):
             sum(row["sessions"] for row in timeline),
             2,
         )
+
         self.assertTrue(
             all(row["behavior"] == BOT for row in timeline)
         )
@@ -386,6 +417,7 @@ class TestAPI(unittest.TestCase):
         ).json()
 
         self.assertEqual(len(hourly), 24)
+
         self.assertEqual(
             sum(row["sessions"] for row in hourly),
             2,
@@ -417,6 +449,7 @@ class TestAPI(unittest.TestCase):
 
     def test_map_respects_filters(self):
         all_points = self.client.get("/api/map").json()
+
         self.assertEqual(len(all_points), 1)
         self.assertEqual(all_points[0]["src_ip"], "1.1.1.1")
 
@@ -535,38 +568,47 @@ class TestAPI(unittest.TestCase):
             rows[0]["src_ip"],
             "1.1.1.1",
         )
+
         self.assertAlmostEqual(
             rows[0]["risk_score"],
             51.2,
         )
+
         self.assertEqual(
             rows[0]["risk_level"],
             "Medium",
         )
+
         self.assertEqual(
             rows[0]["country"],
             "Germany",
         )
-
 
     def test_map_risk_matches_attacker_risk(self):
         attackers = self.client.get(
             "/api/attackers",
             params={"limit": 25},
         ).json()
+
         points = self.client.get("/api/map").json()
 
         attacker = next(
-            row for row in attackers if row["src_ip"] == "1.1.1.1"
+            row
+            for row in attackers
+            if row["src_ip"] == "1.1.1.1"
         )
+
         point = next(
-            row for row in points if row["src_ip"] == "1.1.1.1"
+            row
+            for row in points
+            if row["src_ip"] == "1.1.1.1"
         )
 
         self.assertAlmostEqual(
             point["risk_score"],
             attacker["risk_score"],
         )
+
         self.assertEqual(
             point["risk_level"],
             attacker["risk_level"],
@@ -577,13 +619,17 @@ class TestAPI(unittest.TestCase):
             "/api/attackers",
             params={"limit": 25},
         ).json()
-        risk_rows = self.client.get("/api/risk-levels").json()
+
+        risk_rows = self.client.get(
+            "/api/risk-levels"
+        ).json()
 
         attacker_counts = {
             "High": 0,
             "Medium": 0,
             "Low": 0,
         }
+
         for row in attackers:
             attacker_counts[row["risk_level"]] += 1
 
@@ -598,8 +644,13 @@ class TestAPI(unittest.TestCase):
         )
 
     def test_overview_high_risk_ips_matches_risk_levels(self):
-        overview = self.client.get("/api/overview").json()
-        risk_rows = self.client.get("/api/risk-levels").json()
+        overview = self.client.get(
+            "/api/overview"
+        ).json()
+
+        risk_rows = self.client.get(
+            "/api/risk-levels"
+        ).json()
 
         high_count = next(
             row["ips"]
@@ -617,6 +668,7 @@ class TestAPI(unittest.TestCase):
             "/api/attackers",
             params={"limit": 25},
         ).json()
+
         summary = next(
             row
             for row in summary_rows
@@ -628,6 +680,7 @@ class TestAPI(unittest.TestCase):
         )
 
         self.assertEqual(profile.status_code, 200)
+
         profile = profile.json()
 
         for field in (
@@ -659,6 +712,7 @@ class TestAPI(unittest.TestCase):
             "/api/attackers",
             params={**params, "limit": 25},
         ).json()
+
         points = self.client.get(
             "/api/map",
             params=params,
@@ -671,10 +725,12 @@ class TestAPI(unittest.TestCase):
             points[0]["src_ip"],
             attackers[0]["src_ip"],
         )
+
         self.assertAlmostEqual(
             points[0]["risk_score"],
             attackers[0]["risk_score"],
         )
+
         self.assertEqual(
             points[0]["risk_level"],
             attackers[0]["risk_level"],
@@ -690,7 +746,9 @@ class TestAPI(unittest.TestCase):
         )
 
         self.assertEqual(profile.status_code, 200)
+
         data = profile.json()
+
         self.assertEqual(data["sessions"], 1)
         self.assertEqual(data["failed_logins"], 1)
         self.assertEqual(data["successful_sessions"], 0)
@@ -703,7 +761,9 @@ class TestAPI(unittest.TestCase):
         )
 
         self.assertEqual(profile.status_code, 200)
+
         data = profile.json()
+
         self.assertEqual(data["sessions"], 2)
         self.assertEqual(data["failed_logins"], 4)
         self.assertEqual(data["successful_sessions"], 0)
@@ -730,6 +790,7 @@ class TestAPI(unittest.TestCase):
         )
 
         self.assertEqual(profile.status_code, 200)
+
         data = profile.json()
 
         self.assertEqual(
@@ -739,6 +800,7 @@ class TestAPI(unittest.TestCase):
                 {"value": "test", "count": 1},
             ],
         )
+
         self.assertEqual(
             data["passwords"],
             [
@@ -747,7 +809,83 @@ class TestAPI(unittest.TestCase):
                 {"value": "z", "count": 1},
             ],
         )
-        self.assertEqual(data["commands_top"], [])
+
+        self.assertEqual(
+            data["commands_top"],
+            [],
+        )
+
+    def test_attacker_dna(self):
+        response = self.client.get(
+            "/api/attackers/1.1.1.1/dna"
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+
+        self.assertEqual(data["src_ip"], "1.1.1.1")
+        self.assertEqual(data["sessions"], 1)
+        self.assertEqual(data["failed_logins"], 2)
+        self.assertEqual(data["successful_sessions"], 1)
+        self.assertEqual(data["commands"], 1)
+        self.assertEqual(data["download_sessions"], 1)
+
+        self.assertEqual(data["login_rate"], 100.0)
+        self.assertEqual(data["command_rate"], 100.0)
+        self.assertEqual(data["download_rate"], 100.0)
+
+        self.assertEqual(data["persistence"], 100.0)
+        self.assertEqual(data["activity"], 100.0)
+
+        self.assertIn("BF", data["fingerprint"])
+        self.assertIn("AUTH", data["fingerprint"])
+        self.assertIn("CMD", data["fingerprint"])
+        self.assertIn("DL", data["fingerprint"])
+        self.assertIn("PERSIST", data["fingerprint"])
+
+    def test_attacker_dna_respects_date_filter(self):
+        response = self.client.get(
+            "/api/attackers/2.2.2.2/dna",
+            params={
+                "start": "2026-01-02",
+                "end": "2026-01-02",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+
+        self.assertEqual(data["src_ip"], "2.2.2.2")
+        self.assertEqual(data["sessions"], 1)
+        self.assertEqual(data["failed_logins"], 1)
+
+    def test_attacker_dna_respects_behavior_filter(self):
+        response = self.client.get(
+            "/api/attackers/2.2.2.2/dna",
+            params={"behavior": BOT},
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+
+        self.assertEqual(data["src_ip"], "2.2.2.2")
+        self.assertEqual(data["sessions"], 2)
+        self.assertEqual(data["failed_logins"], 4)
+
+    def test_attacker_dna_returns_404_for_filtered_out_ip(self):
+        response = self.client.get(
+            "/api/attackers/2.2.2.2/dna",
+            params={
+                "start": "2026-01-01",
+                "end": "2026-01-01",
+                "behavior": HUMAN,
+            },
+        )
+
+        self.assertEqual(response.status_code, 404)
 
     def test_missing_database_returns_503(self):
         client = TestClient(
@@ -760,6 +898,7 @@ class TestAPI(unittest.TestCase):
             client.get("/api/overview").status_code,
             503,
         )
+
         self.assertFalse(
             client.get("/health").json()["database_ready"]
         )

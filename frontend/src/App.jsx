@@ -1,6 +1,14 @@
+// frontend/src/App.jsx
+
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  CircleMarker,
+  Popup,
+  useMap,
+} from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   Activity,
@@ -27,7 +35,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+
 const API = "http://127.0.0.1:8000";
+
 function KpiCard({ icon, label, value, danger, success }) {
   return (
     <div className="kpi-card">
@@ -38,8 +48,10 @@ function KpiCard({ icon, label, value, danger, success }) {
       >
         {icon}
       </div>
+
       <div className="kpi-content">
         <div className="kpi-label">{label}</div>
+
         <div className="kpi-value">
           {value === null || value === undefined
             ? "—"
@@ -49,6 +61,7 @@ function KpiCard({ icon, label, value, danger, success }) {
     </div>
   );
 }
+
 function RiskBadge({ level }) {
   return (
     <span className={`risk-badge ${String(level || "").toLowerCase()}`}>
@@ -56,6 +69,7 @@ function RiskBadge({ level }) {
     </span>
   );
 }
+
 function App() {
   const [meta, setMeta] = useState(null);
   const [overview, setOverview] = useState(null);
@@ -69,29 +83,38 @@ function App() {
   const [usernames, setUsernames] = useState([]);
   const [passwords, setPasswords] = useState([]);
   const [commands, setCommands] = useState([]);
+
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [selectedBehavior, setSelectedBehavior] = useState("");
+
   const [filters, setFilters] = useState({
     start: "",
     end: "",
     behavior: "",
   });
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
   const buildParams = () => {
     const params = {};
+
     if (filters.start) {
       params.start = filters.start;
     }
+
     if (filters.end) {
       params.end = filters.end;
     }
+
     if (filters.behavior) {
       params.behavior = filters.behavior;
     }
+
     return params;
   };
+
   useEffect(() => {
     async function loadMeta() {
       try {
@@ -101,14 +124,18 @@ function App() {
         console.error("Failed to load metadata:", err);
       }
     }
+
     loadMeta();
   }, []);
+
   useEffect(() => {
     async function loadDashboard() {
       try {
         setLoading(true);
         setError("");
+
         const params = buildParams();
+
         const [
           overviewRes,
           timelineRes,
@@ -154,6 +181,7 @@ function App() {
             },
           }),
         ]);
+
         setOverview(overviewRes.data);
         setTimeline(timelineRes.data);
         setBehaviorData(behaviorRes.data);
@@ -167,6 +195,7 @@ function App() {
         setCommands(commandsRes.data);
       } catch (err) {
         console.error(err);
+
         if (err.response?.data?.detail) {
           setError(err.response.data.detail);
         } else {
@@ -178,8 +207,10 @@ function App() {
         setLoading(false);
       }
     }
+
     loadDashboard();
   }, [filters]);
+
   const applyFilters = () => {
     setFilters({
       start: startDate,
@@ -187,16 +218,19 @@ function App() {
       behavior: selectedBehavior,
     });
   };
+
   const resetFilters = () => {
     setStartDate("");
     setEndDate("");
     setSelectedBehavior("");
+
     setFilters({
       start: "",
       end: "",
       behavior: "",
     });
   };
+
   const timelineChart = Object.values(
     timeline.reduce((acc, item) => {
       if (!acc[item.day]) {
@@ -205,27 +239,34 @@ function App() {
           sessions: 0,
         };
       }
+
       acc[item.day].sessions += item.sessions;
+
       return acc;
     }, {})
   );
+
   const riskChart = riskData.map((item) => ({
     name: item.risk_level,
     value: item.ips,
   }));
+
   const riskColors = {
     High: "#ef4444",
     Medium: "#f59e0b",
     Low: "#22c55e",
   };
+
   const formattedHourlyData = hourlyData.map((item) => ({
     ...item,
     hourLabel: `${String(item.hour).padStart(2, "0")}:00`,
   }));
+
   if (loading && !overview) {
     return (
       <div className="app-shell">
         <Sidebar />
+
         <main className="main-content">
           <div className="loading-screen">
             <div className="loading-spinner" />
@@ -235,105 +276,103 @@ function App() {
       </div>
     );
   }
+
   return (
     <div className="app-shell">
       <Sidebar />
+
       <main className="main-content">
-        {/* HEADER */}
         <header id="overview" className="dashboard-header">
           <div>
-            <div className="eyebrow">
-              SECURITY OPERATIONS
-            </div>
+            <div className="eyebrow">SECURITY OPERATIONS</div>
             <h1>Honeypot Attack Overview</h1>
           </div>
+
           <div className="live-indicator">
             <span className="live-dot" />
             LIVE DATA
           </div>
         </header>
-        {/* MONITORING */}
+
         <section className="monitoring-banner">
           <div>
-            <div className="section-eyebrow">
-              THREAT MONITORING
-            </div>
+            <div className="section-eyebrow">THREAT MONITORING</div>
+
             <h2>
               Attack activity across your honeypot infrastructure
             </h2>
           </div>
+
           <div className="time-range">
             <div>
               <span>First seen</span>
+
               <strong>
-                {overview?.first_seen ||
-                  meta?.first_day ||
-                  "—"}
+                {overview?.first_seen || meta?.first_day || "—"}
               </strong>
             </div>
+
             <div>
               <span>Last seen</span>
+
               <strong>
-                {overview?.last_seen ||
-                  meta?.last_day ||
-                  "—"}
+                {overview?.last_seen || meta?.last_day || "—"}
               </strong>
             </div>
           </div>
         </section>
-        {/* FILTERS */}
+
         <section className="filter-bar">
           <div className="filter-group">
             <label>Start Date</label>
+
             <input
               type="date"
               value={startDate}
               min={meta?.first_day || ""}
               max={meta?.last_day || ""}
-              onChange={(event) =>
-                setStartDate(event.target.value)
-              }
+              onChange={(event) => setStartDate(event.target.value)}
             />
           </div>
+
           <div className="filter-group">
             <label>End Date</label>
+
             <input
               type="date"
               value={endDate}
               min={meta?.first_day || ""}
               max={meta?.last_day || ""}
-              onChange={(event) =>
-                setEndDate(event.target.value)
-              }
+              onChange={(event) => setEndDate(event.target.value)}
             />
           </div>
+
           <div className="filter-group">
             <label>Behavior</label>
+
             <select
               value={selectedBehavior}
               onChange={(event) =>
                 setSelectedBehavior(event.target.value)
               }
             >
-              <option value="">
-                All Behaviors
-              </option>
+              <option value="">All Behaviors</option>
+
               {meta?.behaviors?.map((behavior) => (
-                <option
-                  key={behavior}
-                  value={behavior}
-                >
+                <option key={behavior} value={behavior}>
                   {behavior}
                 </option>
               ))}
             </select>
           </div>
+
           <button
             className="filter-button"
             onClick={applyFilters}
           >
             Apply Filters
           </button>
+
           <button
             className="reset-button"
             onClick={resetFilters}
@@ -341,60 +380,64 @@ function App() {
             Reset
           </button>
         </section>
-        {/* ERROR */}
+
         {error && (
           <div className="error-banner">
             <AlertTriangle size={18} />
             <span>{error}</span>
           </div>
         )}
-        {/* ACTIVE FILTER */}
-        {(filters.start ||
-          filters.end ||
-          filters.behavior) && (
+
+        {(filters.start || filters.end || filters.behavior) && (
           <div className="active-filter">
             <span>FILTERED VIEW</span>
+
             {filters.start && (
               <span>
                 From <strong>{filters.start}</strong>
               </span>
             )}
+
             {filters.end && (
               <span>
                 To <strong>{filters.end}</strong>
               </span>
             )}
+
             {filters.behavior && (
               <span>
-                Behavior{" "}
-                <strong>{filters.behavior}</strong>
+                Behavior <strong>{filters.behavior}</strong>
               </span>
             )}
           </div>
         )}
-        {/* KPI */}
+
         <section className="kpi-grid">
           <KpiCard
             icon={<Activity />}
             label="Total Events"
             value={overview?.total_events}
           />
+
           <KpiCard
             icon={<Bot />}
             label="Sessions"
             value={overview?.sessions}
           />
+
           <KpiCard
             icon={<Users />}
             label="Unique Attackers"
             value={overview?.unique_ips}
           />
+
           <KpiCard
             icon={<AlertTriangle />}
             label="Failed Logins"
             value={overview?.failed_logins}
             danger
           />
+
           <KpiCard
             icon={<ShieldAlert />}
             label="Successful Sessions"
@@ -402,7 +445,7 @@ function App() {
             success
           />
         </section>
-        {/* TIMELINE + RISK */}
+
         <section className="dashboard-grid two-columns">
           <Panel
             title="Attack Timeline"
@@ -410,15 +453,13 @@ function App() {
           >
             <div className="chart-container">
               {timelineChart.length > 0 ? (
-                <ResponsiveContainer
-                  width="100%"
-                  height={310}
-                >
+                <ResponsiveContainer width="100%" height={310}>
                   <LineChart data={timelineChart}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke="#1c2a3b"
                     />
+
                     <XAxis
                       dataKey="day"
                       stroke="#61738e"
@@ -427,6 +468,7 @@ function App() {
                         fontSize: 11,
                       }}
                     />
+
                     <YAxis
                       stroke="#61738e"
                       tick={{
@@ -434,15 +476,16 @@ function App() {
                         fontSize: 11,
                       }}
                     />
+
                     <Tooltip
                       contentStyle={{
                         background: "#0b1320",
-                        border:
-                          "1px solid #24364b",
+                        border: "1px solid #24364b",
                         borderRadius: "8px",
                         color: "#fff",
                       }}
                     />
+
                     <Line
                       type="monotone"
                       dataKey="sessions"
@@ -459,22 +502,18 @@ function App() {
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <EmptyState
-                  text="No timeline data for this filter."
-                />
+                <EmptyState text="No timeline data for this filter." />
               )}
             </div>
           </Panel>
+
           <Panel
             title="Risk Distribution"
             subtitle="Attacker risk levels"
           >
             <div className="chart-container">
               {riskChart.length > 0 ? (
-                <ResponsiveContainer
-                  width="100%"
-                  height={310}
-                >
+                <ResponsiveContainer width="100%" height={310}>
                   <PieChart>
                     <Pie
                       data={riskChart}
@@ -489,21 +528,20 @@ function App() {
                       {riskChart.map((entry) => (
                         <Cell
                           key={entry.name}
-                          fill={
-                            riskColors[entry.name]
-                          }
+                          fill={riskColors[entry.name]}
                         />
                       ))}
                     </Pie>
+
                     <Tooltip
                       contentStyle={{
                         background: "#0b1320",
-                        border:
-                          "1px solid #24364b",
+                        border: "1px solid #24364b",
                         borderRadius: "8px",
                         color: "#fff",
                       }}
                     />
+
                     <Legend
                       verticalAlign="bottom"
                       formatter={(value) => (
@@ -519,14 +557,12 @@ function App() {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <EmptyState
-                  text="No risk data for this filter."
-                />
+                <EmptyState text="No risk data for this filter." />
               )}
             </div>
           </Panel>
         </section>
-        {/* HOURLY */}
+
         <section className="dashboard-grid">
           <Panel
             title="Attack Activity by Hour"
@@ -534,17 +570,13 @@ function App() {
           >
             <div className="chart-container">
               {formattedHourlyData.length > 0 ? (
-                <ResponsiveContainer
-                  width="100%"
-                  height={300}
-                >
-                  <BarChart
-                    data={formattedHourlyData}
-                  >
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={formattedHourlyData}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke="#1c2a3b"
                     />
+
                     <XAxis
                       dataKey="hourLabel"
                       stroke="#61738e"
@@ -553,6 +585,7 @@ function App() {
                         fontSize: 10,
                       }}
                     />
+
                     <YAxis
                       stroke="#61738e"
                       tick={{
@@ -560,15 +593,16 @@ function App() {
                         fontSize: 11,
                       }}
                     />
+
                     <Tooltip
                       contentStyle={{
                         background: "#0b1320",
-                        border:
-                          "1px solid #24364b",
+                        border: "1px solid #24364b",
                         borderRadius: "8px",
                         color: "#fff",
                       }}
                     />
+
                     <Bar
                       dataKey="sessions"
                       fill="#38bdf8"
@@ -577,30 +611,29 @@ function App() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <EmptyState
-                  text="No hourly activity for this filter."
-                />
+                <EmptyState text="No hourly activity for this filter." />
               )}
             </div>
           </Panel>
         </section>
-        {/* BEHAVIOR + SOURCES */}
-        <section id="threat-intelligence" className="dashboard-grid two-columns">
+
+        <section
+          id="threat-intelligence"
+          className="dashboard-grid two-columns"
+        >
           <Panel
             title="Attack Behavior"
             subtitle="Session classification"
           >
             <div className="chart-container">
               {behaviorData.length > 0 ? (
-                <ResponsiveContainer
-                  width="100%"
-                  height={330}
-                >
+                <ResponsiveContainer width="100%" height={330}>
                   <BarChart data={behaviorData}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke="#1c2a3b"
                     />
+
                     <XAxis
                       dataKey="behavior"
                       stroke="#61738e"
@@ -609,6 +642,7 @@ function App() {
                         fontSize: 11,
                       }}
                     />
+
                     <YAxis
                       stroke="#61738e"
                       tick={{
@@ -616,15 +650,16 @@ function App() {
                         fontSize: 11,
                       }}
                     />
+
                     <Tooltip
                       contentStyle={{
                         background: "#0b1320",
-                        border:
-                          "1px solid #24364b",
+                        border: "1px solid #24364b",
                         borderRadius: "8px",
                         color: "#fff",
                       }}
                     />
+
                     <Bar
                       dataKey="sessions"
                       fill="#38bdf8"
@@ -633,35 +668,37 @@ function App() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <EmptyState
-                  text="No behavior data for this filter."
-                />
+                <EmptyState text="No behavior data for this filter." />
               )}
             </div>
           </Panel>
+
           <Panel
             title="Top Attack Sources"
             subtitle="Highest activity IP addresses"
           >
-            <AttackersTable
-              attackers={attackers}
-            />
+            <AttackersTable attackers={attackers} />
           </Panel>
         </section>
-        {/* CREDENTIAL INTELLIGENCE */}
-        <section id="credentials" className="dashboard-grid three-columns">
+
+        <section
+          id="credentials"
+          className="dashboard-grid three-columns"
+        >
           <CredentialPanel
             title="Top Usernames"
             subtitle="Most attempted usernames"
             data={usernames}
             valueLabel="USERNAME"
           />
+
           <CredentialPanel
             title="Top Passwords"
             subtitle="Most attempted passwords"
             data={passwords}
             valueLabel="PASSWORD"
           />
+
           <CredentialPanel
             title="Top Commands"
             subtitle="Most observed commands"
@@ -669,16 +706,19 @@ function App() {
             valueLabel="COMMAND"
           />
         </section>
-        {/* ATTACKER MAP */}
+
         <section id="attack-sources" className="dashboard-grid">
           <Panel
             title="Attacker Origin Map"
             subtitle="Approximate geographic distribution of observed attack sources"
           >
-            <AttackerMap data={mapData} filters={filters} />
+            <AttackerMap
+              data={mapData}
+              filters={filters}
+            />
           </Panel>
         </section>
-        {/* GEOGRAPHIC + RISK */}
+
         <section className="dashboard-grid two-columns">
           <Panel
             title="Geographic Sources"
@@ -686,90 +726,74 @@ function App() {
           >
             {countries.length > 0 ? (
               <div className="country-list">
-                {countries.map(
-                  (country, index) => (
-                    <div
-                      className="country-row"
-                      key={`${country.country}-${index}`}
-                    >
-                      <div className="country-name">
-                        <Globe size={18} />
-                        <span>
-                          {country.country}
-                        </span>
-                      </div>
-                      <div className="country-stats">
-                        <strong>
-                          {country.sessions.toLocaleString()}
-                        </strong>
-                        <span>
-                          sessions
-                        </span>
-                      </div>
+                {countries.map((country, index) => (
+                  <div
+                    className="country-row"
+                    key={`${country.country}-${index}`}
+                  >
+                    <div className="country-name">
+                      <Globe size={18} />
+
+                      <span>{country.country}</span>
                     </div>
-                  )
-                )}
+
+                    <div className="country-stats">
+                      <strong>
+                        {country.sessions.toLocaleString()}
+                      </strong>
+
+                      <span>sessions</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
-              <EmptyState
-                text="No geographic data for this filter."
-              />
+              <EmptyState text="No geographic data for this filter." />
             )}
           </Panel>
+
           <Panel
             title="Highest Risk Attackers"
             subtitle="Risk-ranked IP addresses"
           >
             <div className="risk-list">
               {attackers.length > 0 ? (
-                attackers
-                  .slice(0, 5)
-                  .map((attacker) => (
-                    <div
-                      className="risk-row"
-                      key={attacker.src_ip}
-                    >
-                      <div className="risk-ip">
-                        <strong>
-                          {attacker.src_ip}
-                        </strong>
-                        <span>
-                          {attacker.sessions.toLocaleString()}{" "}
-                          sessions
-                        </span>
-                      </div>
-                      <RiskBadge
-                        level={
-                          attacker.risk_level
-                        }
-                      />
-                      <strong className="risk-score">
-                        {Number(
-                          attacker.risk_score
-                        ).toFixed(1)}
-                      </strong>
+                attackers.slice(0, 5).map((attacker) => (
+                  <div
+                    className="risk-row"
+                    key={attacker.src_ip}
+                  >
+                    <div className="risk-ip">
+                      <strong>{attacker.src_ip}</strong>
+
+                      <span>
+                        {attacker.sessions.toLocaleString()} sessions
+                      </span>
                     </div>
-                  ))
+
+                    <RiskBadge level={attacker.risk_level} />
+
+                    <strong className="risk-score">
+                      {Number(attacker.risk_score).toFixed(1)}
+                    </strong>
+                  </div>
+                ))
               ) : (
-                <EmptyState
-                  text="No risk data for this filter."
-                />
+                <EmptyState text="No risk data for this filter." />
               )}
             </div>
           </Panel>
         </section>
+
         <footer className="dashboard-footer">
-          <div>
-            Honeypot Attack Analytics
-          </div>
-          <div>
-            FastAPI + React
-          </div>
+          <div>Honeypot Attack Analytics</div>
+          <div>FastAPI + React</div>
         </footer>
       </main>
     </div>
   );
 }
+
 /* =========================================================
    SIDEBAR
    ========================================================= */
@@ -777,46 +801,48 @@ function App() {
 function Sidebar() {
   const [activeSection, setActiveSection] = useState("overview");
 
- useEffect(() => {
-  const sections = [
-    "overview",
-    "threat-intelligence",
-    "credentials",
-    "attack-sources",
-  ];
+  useEffect(() => {
+    const sections = [
+      "overview",
+      "threat-intelligence",
+      "credentials",
+      "attack-sources",
+    ];
 
-  const observers = sections.map((sectionId) => {
-    const element = document.getElementById(sectionId);
+    const observers = sections.map((sectionId) => {
+      const element = document.getElementById(sectionId);
 
-    if (!element) {
-      return null;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries.find((entry) => entry.isIntersecting);
-
-        if (visible) {
-          setActiveSection(visible.target.id);
-        }
-      },
-      {
-        rootMargin: "-20% 0px -65% 0px",
-        threshold: 0,
+      if (!element) {
+        return null;
       }
-    );
 
-    observer.observe(element);
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const visible = entries.find(
+            (entry) => entry.isIntersecting
+          );
 
-    return observer;
-  });
+          if (visible) {
+            setActiveSection(visible.target.id);
+          }
+        },
+        {
+          rootMargin: "-20% 0px -65% 0px",
+          threshold: 0,
+        }
+      );
 
-  return () => {
-    observers.forEach((observer) => {
-      observer?.disconnect();
+      observer.observe(element);
+
+      return observer;
     });
-  };
-}, []);
+
+    return () => {
+      observers.forEach((observer) => {
+        observer?.disconnect();
+      });
+    };
+  }, []);
 
   return (
     <aside className="sidebar">
@@ -826,9 +852,7 @@ function Sidebar() {
         </div>
 
         <div>
-          <div className="brand-title">
-            Honeypot
-          </div>
+          <div className="brand-title">Honeypot</div>
 
           <div className="brand-subtitle">
             Attack Analytics
@@ -891,8 +915,9 @@ function SidebarItem({ icon, label, active, href }) {
 }
 
 /* =========================================================
-   PANEL
+   MAP
    ========================================================= */
+
 function FocusMarker({
   point,
   sessions,
@@ -901,28 +926,57 @@ function FocusMarker({
   onSelect,
 }) {
   const map = useMap();
+
   const latitude = Number(point.latitude);
   const longitude = Number(point.longitude);
-  const baseRadius = Math.max(5, Math.min(15, 5 + Math.sqrt(sessions) * 1.05));
-  const radius = selected ? Math.min(baseRadius + 4, 19) : baseRadius;
+
+  const baseRadius = Math.max(
+    5,
+    Math.min(15, 5 + Math.sqrt(sessions) * 1.05)
+  );
+
+  const radius = selected
+    ? Math.min(baseRadius + 4, 19)
+    : baseRadius;
+
   const riskLevel = String(point.risk_level || "Low");
+
   const riskColors = {
-    High: { color: "#ef4444", glow: "#f87171" },
-    Medium: { color: "#f59e0b", glow: "#fbbf24" },
-    Low: { color: "#22c55e", glow: "#4ade80" },
+    High: {
+      color: "#ef4444",
+      glow: "#f87171",
+    },
+    Medium: {
+      color: "#f59e0b",
+      glow: "#fbbf24",
+    },
+    Low: {
+      color: "#22c55e",
+      glow: "#4ade80",
+    },
   };
+
   const riskColor = riskColors[riskLevel] || riskColors.Low;
+
   const handleClick = () => {
     onSelect(point.src_ip);
-    map.flyTo([latitude, longitude], Math.max(map.getZoom(), 4), {
-      duration: 0.8,
-    });
+
+    map.flyTo(
+      [latitude, longitude],
+      Math.max(map.getZoom(), 4),
+      {
+        duration: 0.8,
+      }
+    );
   };
+
   return (
     <CircleMarker
       center={[latitude, longitude]}
       radius={radius}
-      eventHandlers={{ click: handleClick }}
+      eventHandlers={{
+        click: handleClick,
+      }}
       pathOptions={{
         color: selected ? "#ffffff" : riskColor.glow,
         fillColor: riskColor.color,
@@ -933,7 +987,10 @@ function FocusMarker({
       <Popup>
         <div className="map-popup">
           <div className="map-popup-header">
-            <div className="map-popup-ip">{point.src_ip}</div>
+            <div className="map-popup-ip">
+              {point.src_ip}
+            </div>
+
             <span
               className="map-popup-risk"
               style={{
@@ -944,67 +1001,88 @@ function FocusMarker({
               {riskLevel}
             </span>
           </div>
+
           <div className="map-popup-location">
             {point.city && point.country
               ? `${point.city}, ${point.country}`
               : point.country || "Unknown location"}
           </div>
+
           <div className="map-popup-divider" />
+
           <div className="map-popup-stat-grid">
             <div>
               <span>SESSIONS</span>
               <strong>{sessions.toLocaleString()}</strong>
             </div>
+
             <div>
               <span>FAILED LOGINS</span>
               <strong>{failed.toLocaleString()}</strong>
             </div>
           </div>
-          <div className="map-popup-note">Approximate IP geolocation</div>
+
+          <div className="map-popup-note">
+            Approximate IP geolocation
+          </div>
         </div>
       </Popup>
     </CircleMarker>
   );
 }
+
 function AttackerMap({ data, filters }) {
   const [selectedIp, setSelectedIp] = useState(null);
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState("");
+  const [dna, setDna] = useState(null);
+  const [dnaLoading, setDnaLoading] = useState(false);
+  const [dnaError, setDnaError] = useState("");
+
   useEffect(() => {
-  if (!selectedIp) {
-    return;
-  }
+    if (!selectedIp) {
+      return;
+    }
 
-  const attackerStillVisible = data.some(
-    (point) => point.src_ip === selectedIp
-  );
+    const attackerStillVisible = data.some(
+      (point) => point.src_ip === selectedIp
+    );
 
-  if (!attackerStillVisible) {
-    setSelectedIp(null);
-    setProfile(null);
-    setProfileError("");
-    setProfileLoading(false);
-  }
-}, [data, selectedIp]);
+    if (!attackerStillVisible) {
+      setSelectedIp(null);
+      setProfile(null);
+      setProfileError("");
+      setProfileLoading(false);
+      setDna(null);
+      setDnaError("");
+      setDnaLoading(false);
+    }
+  }, [data, selectedIp]);
+
   useEffect(() => {
     if (!selectedIp) {
       setProfile(null);
       setProfileError("");
       return;
     }
+
     async function loadProfile() {
       try {
         setProfileLoading(true);
         setProfileError("");
+
         const params = {};
+
         if (filters.start) params.start = filters.start;
         if (filters.end) params.end = filters.end;
         if (filters.behavior) params.behavior = filters.behavior;
+
         const response = await axios.get(
           `${API}/api/attackers/${encodeURIComponent(selectedIp)}`,
           { params }
         );
+
         setProfile(response.data);
       } catch (err) {
         console.error("Failed to load attacker profile:", err);
@@ -1014,11 +1092,54 @@ function AttackerMap({ data, filters }) {
         setProfileLoading(false);
       }
     }
+
     loadProfile();
   }, [selectedIp, filters]);
+
+  useEffect(() => {
+    if (!selectedIp) {
+      setDna(null);
+      setDnaError("");
+      return;
+    }
+
+    async function loadDna() {
+      try {
+        setDnaLoading(true);
+        setDnaError("");
+
+        const params = {};
+
+        if (filters.start) params.start = filters.start;
+        if (filters.end) params.end = filters.end;
+        if (filters.behavior) params.behavior = filters.behavior;
+
+        const response = await axios.get(
+          `${API}/api/attackers/${encodeURIComponent(
+            selectedIp
+          )}/dna`,
+          { params }
+        );
+
+        setDna(response.data);
+      } catch (err) {
+        console.error("Failed to load attacker DNA:", err);
+        setDna(null);
+        setDnaError("Unable to load attacker DNA.");
+      } finally {
+        setDnaLoading(false);
+      }
+    }
+
+    loadDna();
+  }, [selectedIp, filters]);
+
   if (!data.length) {
-    return <EmptyState text="No geolocation data for this filter." />;
+    return (
+      <EmptyState text="No geolocation data for this filter." />
+    );
   }
+
   return (
     <div className="attacker-map">
       <MapContainer
@@ -1031,12 +1152,14 @@ function AttackerMap({ data, filters }) {
         className="attacker-map-container"
       >
         <TileLayer
-          attribution='&copy; OpenStreetMap contributors'
+          attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+
         {data.map((point) => {
           const sessions = Number(point.sessions || 0);
           const failed = Number(point.failed_logins || 0);
+
           return (
             <FocusMarker
               key={point.src_ip}
@@ -1049,92 +1172,284 @@ function AttackerMap({ data, filters }) {
           );
         })}
       </MapContainer>
+
       <div className="map-footer">
         <div className="map-legend">
           <span className="map-legend-title">RISK LEVEL</span>
-          <span className="map-legend-item"><i className="map-legend-dot low" /> Low</span>
-          <span className="map-legend-item"><i className="map-legend-dot medium" /> Medium</span>
-          <span className="map-legend-item"><i className="map-legend-dot high" /> High</span>
+
+          <span className="map-legend-item">
+            <i className="map-legend-dot low" /> Low
+          </span>
+
+          <span className="map-legend-item">
+            <i className="map-legend-dot medium" /> Medium
+          </span>
+
+          <span className="map-legend-item">
+            <i className="map-legend-dot high" /> High
+          </span>
         </div>
-        <span className="map-count">{data.length} attacker IPs mapped</span>
+
+        <span className="map-count">
+          {data.length} attacker IPs mapped
+        </span>
       </div>
+
       <div className="map-disclaimer">
-        IP geolocation is approximate and represents the registered geographic location of the source IP, not the exact physical location of an attacker.
+        IP geolocation is approximate and represents the registered
+        geographic location of the source IP, not the exact physical
+        location of an attacker.
       </div>
+
       {selectedIp && (
         <section className="attacker-profile-panel">
           {profileLoading ? (
-            <div className="attacker-profile-loading">Loading attacker intelligence…</div>
+            <div className="attacker-profile-loading">
+              Loading attacker intelligence…
+            </div>
           ) : profileError ? (
-            <div className="attacker-profile-error">{profileError}</div>
+            <div className="attacker-profile-error">
+              {profileError}
+            </div>
           ) : profile ? (
             <>
               <div className="attacker-profile-header">
                 <div>
-                  <div className="attacker-profile-kicker">ATTACKER INTELLIGENCE</div>
-                  <div className="attacker-profile-ip">{profile.src_ip}</div>
+                  <div className="attacker-profile-kicker">
+                    ATTACKER INTELLIGENCE
+                  </div>
+
+                  <div className="attacker-profile-ip">
+                    {profile.src_ip}
+                  </div>
+
                   <div className="attacker-profile-location">
-                    {profile.city ? `${profile.city}, ` : ""}{profile.country || "Unknown location"}
+                    {profile.city
+                      ? `${profile.city}, `
+                      : ""}
+                    {profile.country || "Unknown location"}
                   </div>
                 </div>
+
                 <div className="attacker-profile-risk-wrap">
-                  <span className={`attacker-profile-risk ${String(profile.risk_level || "").toLowerCase()}`}>
+                  <span
+                    className={`attacker-profile-risk ${String(
+                      profile.risk_level || ""
+                    ).toLowerCase()}`}
+                  >
                     {profile.risk_level || "Unknown"}
                   </span>
-                  <button className="attacker-profile-close" onClick={() => setSelectedIp(null)}>Close</button>
+
+                  <button
+                    className="attacker-profile-close"
+                    onClick={() => setSelectedIp(null)}
+                  >
+                    Close
+                  </button>
                 </div>
               </div>
+
               <div className="attacker-profile-stats">
                 <div className="attacker-profile-stat">
                   <span>RISK SCORE</span>
-                  <strong>{Number(profile.risk_score || 0).toFixed(1)} / 100</strong>
+                  <strong>
+                    {Number(profile.risk_score || 0).toFixed(1)} / 100
+                  </strong>
                 </div>
+
                 <div className="attacker-profile-stat">
                   <span>SESSIONS</span>
-                  <strong>{Number(profile.sessions || 0).toLocaleString()}</strong>
+                  <strong>
+                    {Number(profile.sessions || 0).toLocaleString()}
+                  </strong>
                 </div>
+
                 <div className="attacker-profile-stat">
                   <span>FAILED LOGINS</span>
-                  <strong>{Number(profile.failed_logins || 0).toLocaleString()}</strong>
+                  <strong>
+                    {Number(
+                      profile.failed_logins || 0
+                    ).toLocaleString()}
+                  </strong>
                 </div>
+
                 <div className="attacker-profile-stat">
                   <span>SUCCESSFUL</span>
-                  <strong>{Number(profile.successful_sessions || 0).toLocaleString()}</strong>
+                  <strong>
+                    {Number(
+                      profile.successful_sessions || 0
+                    ).toLocaleString()}
+                  </strong>
                 </div>
+
                 <div className="attacker-profile-stat">
                   <span>COMMANDS</span>
-                  <strong>{Number(profile.commands || 0).toLocaleString()}</strong>
+                  <strong>
+                    {Number(profile.commands || 0).toLocaleString()}
+                  </strong>
                 </div>
               </div>
+
               <div className="attacker-profile-meta">
-                <div><span>FIRST SEEN</span><strong>{profile.first_seen || "—"}</strong></div>
-                <div><span>LAST SEEN</span><strong>{profile.last_seen || "—"}</strong></div>
-                <div><span>BEHAVIOR</span><strong>{profile.behavior || "Unclustered"}</strong></div>
+                <div>
+                  <span>FIRST SEEN</span>
+                  <strong>{profile.first_seen || "—"}</strong>
+                </div>
+
+                <div>
+                  <span>LAST SEEN</span>
+                  <strong>{profile.last_seen || "—"}</strong>
+                </div>
+
+                <div>
+                  <span>BEHAVIOR</span>
+                  <strong>
+                    {profile.behavior || "Unclustered"}
+                  </strong>
+                </div>
               </div>
+
+              <div className="attacker-dna-panel">
+                <div className="attacker-dna-header">
+                  <div>
+                    <div className="attacker-profile-kicker">
+                      ATTACKER DNA
+                    </div>
+
+                    <div className="attacker-dna-title">
+                      Behavioral Fingerprint
+                    </div>
+                  </div>
+
+                  {dna?.fingerprint && (
+                    <span className="attacker-dna-fingerprint">
+                      {dna.fingerprint}
+                    </span>
+                  )}
+                </div>
+
+                {dnaLoading ? (
+                  <div className="attacker-profile-loading">
+                    Building behavioral fingerprint…
+                  </div>
+                ) : dnaError ? (
+                  <div className="attacker-profile-error">
+                    {dnaError}
+                  </div>
+                ) : dna ? (
+                  <>
+                    <div className="attacker-dna-grid">
+                      <DnaMetric
+                        label="LOGIN RATE"
+                        value={`${Number(
+                          dna.login_rate || 0
+                        ).toFixed(1)}%`}
+                      />
+
+                      <DnaMetric
+                        label="COMMAND RATE"
+                        value={`${Number(
+                          dna.command_rate || 0
+                        ).toFixed(1)}%`}
+                      />
+
+                      <DnaMetric
+                        label="DOWNLOAD RATE"
+                        value={`${Number(
+                          dna.download_rate || 0
+                        ).toFixed(1)}%`}
+                      />
+
+                      <DnaMetric
+                        label="PERSISTENCE"
+                        value={`${Number(
+                          dna.persistence || 0
+                        ).toFixed(1)}%`}
+                      />
+
+                      <DnaMetric
+                        label="ACTIVITY"
+                        value={`${Number(
+                          dna.activity || 0
+                        ).toFixed(1)}%`}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="attacker-profile-empty">
+                    No behavioral DNA available.
+                  </div>
+                )}
+              </div>
+
               <div className="attacker-profile-columns">
                 <div className="attacker-profile-list">
-                  <div className="attacker-profile-list-title">TARGETED USERNAMES</div>
-                  {profile.usernames?.length ? profile.usernames.map((item) => (
-                    <div className="attacker-profile-list-row" key={item.value}>
-                      <span>{item.value}</span><strong>{item.count}</strong>
-                    </div>
-                  )) : <span className="attacker-profile-empty">No usernames observed</span>}
+                  <div className="attacker-profile-list-title">
+                    TARGETED USERNAMES
+                  </div>
+
+                  {profile.usernames?.length ? (
+                    profile.usernames.map((item) => (
+                      <div
+                        className="attacker-profile-list-row"
+                        key={item.value}
+                      >
+                        <span>{item.value}</span>
+                        <strong>{item.count}</strong>
+                      </div>
+                    ))
+                  ) : (
+                    <span className="attacker-profile-empty">
+                      No usernames observed
+                    </span>
+                  )}
                 </div>
+
                 <div className="attacker-profile-list">
-                  <div className="attacker-profile-list-title">TARGETED PASSWORDS</div>
-                  {profile.passwords?.length ? profile.passwords.map((item) => (
-                    <div className="attacker-profile-list-row" key={item.value}>
-                      <span>{item.value}</span><strong>{item.count}</strong>
-                    </div>
-                  )) : <span className="attacker-profile-empty">No passwords observed</span>}
+                  <div className="attacker-profile-list-title">
+                    TARGETED PASSWORDS
+                  </div>
+
+                  {profile.passwords?.length ? (
+                    profile.passwords.map((item) => (
+                      <div
+                        className="attacker-profile-list-row"
+                        key={item.value}
+                      >
+                        <span>{item.value}</span>
+                        <strong>{item.count}</strong>
+                      </div>
+                    ))
+                  ) : (
+                    <span className="attacker-profile-empty">
+                      No passwords observed
+                    </span>
+                  )}
                 </div>
+
                 <div className="attacker-profile-list">
-                  <div className="attacker-profile-list-title">OBSERVED COMMANDS</div>
-                  {profile.commands_top?.length ? profile.commands_top.map((item) => (
-                    <div className="attacker-profile-list-row" key={item.value}>
-                      <span title={item.value}>{item.value}</span><strong>{item.count}</strong>
-                    </div>
-                  )) : <span className="attacker-profile-empty">No commands observed</span>}
+                  <div className="attacker-profile-list-title">
+                    OBSERVED COMMANDS
+                  </div>
+
+                  {profile.commands_top?.length ? (
+                    profile.commands_top.map((item) => (
+                      <div
+                        className="attacker-profile-list-row"
+                        key={item.value}
+                      >
+                        <span title={item.value}>
+                          {item.value}
+                        </span>
+
+                        <strong>{item.count}</strong>
+                      </div>
+                    ))
+                  ) : (
+                    <span className="attacker-profile-empty">
+                      No commands observed
+                    </span>
+                  )}
                 </div>
               </div>
             </>
@@ -1144,6 +1459,16 @@ function AttackerMap({ data, filters }) {
     </div>
   );
 }
+
+function DnaMetric({ label, value }) {
+  return (
+    <div className="attacker-dna-metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
 function Panel({
   title,
   subtitle,
@@ -1157,13 +1482,16 @@ function Panel({
           <p>{subtitle}</p>
         </div>
       </div>
+
       {children}
     </section>
   );
 }
+
 /* =========================================================
    CREDENTIAL PANEL
    ========================================================= */
+
 function CredentialPanel({
   title,
   subtitle,
@@ -1184,19 +1512,17 @@ function CredentialPanel({
                 <th>COUNT</th>
               </tr>
             </thead>
+
             <tbody>
-              {data.slice(0, 10).map(
-                (item, index) => (
-                  <tr key={`${item.value}-${index}`}>
-                    <td className="ip-cell">
-                      {item.value}
-                    </td>
-                    <td>
-                      {item.count.toLocaleString()}
-                    </td>
-                  </tr>
-                )
-              )}
+              {data.slice(0, 10).map((item, index) => (
+                <tr key={`${item.value}-${index}`}>
+                  <td className="ip-cell">
+                    {item.value}
+                  </td>
+
+                  <td>{item.count.toLocaleString()}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -1208,19 +1534,18 @@ function CredentialPanel({
     </Panel>
   );
 }
+
 /* =========================================================
    ATTACKERS TABLE
    ========================================================= */
-function AttackersTable({
-  attackers,
-}) {
+
+function AttackersTable({ attackers }) {
   if (!attackers.length) {
     return (
-      <EmptyState
-        text="No attacker data for this filter."
-      />
+      <EmptyState text="No attacker data for this filter." />
     );
   }
+
   return (
     <div className="table-wrapper">
       <table className="attack-table">
@@ -1232,33 +1557,37 @@ function AttackersTable({
             <th>SUCCESS</th>
           </tr>
         </thead>
+
         <tbody>
-          {attackers
-            .slice(0, 7)
-            .map((attacker) => (
-              <tr key={attacker.src_ip}>
-                <td className="ip-cell">
-                  {attacker.src_ip}
-                </td>
-                <td>
-                  {attacker.sessions.toLocaleString()}
-                </td>
-                <td>
-                  {attacker.failed_logins.toLocaleString()}
-                </td>
-                <td className="success-cell">
-                  {attacker.successful_sessions.toLocaleString()}
-                </td>
-              </tr>
-            ))}
+          {attackers.slice(0, 7).map((attacker) => (
+            <tr key={attacker.src_ip}>
+              <td className="ip-cell">
+                {attacker.src_ip}
+              </td>
+
+              <td>
+                {attacker.sessions.toLocaleString()}
+              </td>
+
+              <td>
+                {attacker.failed_logins.toLocaleString()}
+              </td>
+
+              <td className="success-cell">
+                {attacker.successful_sessions.toLocaleString()}
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
   );
 }
+
 /* =========================================================
    EMPTY STATE
    ========================================================= */
+
 function EmptyState({ text }) {
   return (
     <div className="empty-state">
@@ -1266,4 +1595,5 @@ function EmptyState({ text }) {
     </div>
   );
 }
+
 export default App;

@@ -168,6 +168,25 @@ def create_app(db_path=None) -> FastAPI:
 
         return profile
 
+    @router.get("/attackers/{src_ip}/dna")
+    def attacker_dna(
+        src_ip: str,
+        f: Filters = Depends(get_filters),
+    ) -> dict:
+        dna = service.attacker_dna(
+            src_ip,
+            f,
+            db_path,
+        )
+
+        if dna is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Attacker IP not found for the current filters",
+            )
+
+        return dna
+
     @router.get("/risk-levels")
     def risk_levels(
         f: Filters = Depends(get_filters),

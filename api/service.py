@@ -781,6 +781,23 @@ def attacker_detail(src_ip: str, f: Filters, db_path=None) -> dict | None:
         "last_seen": str(attacker["start_time"].max()),
     }
 
+def attacker_dna(src_ip: str, f: Filters, db_path=None) -> dict | None:
+    df = load_sessions(f, db_path)
+
+    if df.empty:
+        return None
+
+    attacker = df[df["src_ip"] == src_ip].copy()
+
+    if attacker.empty:
+        return None
+
+    dna = analysis.compute_attacker_dna(attacker)
+
+    if dna.empty:
+        return None
+
+    return records(dna)[0]
 
 
 def risk_levels(df: pd.DataFrame) -> list[dict]:
@@ -878,3 +895,4 @@ def top_values(
 
 
     return records(df)
+
