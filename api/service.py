@@ -283,7 +283,7 @@ def countries(df: pd.DataFrame, limit: int = 10) -> list[dict]:
 
 
 def map_points(df: pd.DataFrame) -> list[dict]:
-    """One point per attacker IP that has coordinates."""
+    """One point per attacker IP with coordinates and backend risk data."""
     geo = df.dropna(subset=["latitude", "longitude"])
 
     if geo.empty:
@@ -302,6 +302,12 @@ def map_points(df: pd.DataFrame) -> list[dict]:
         .reset_index()
         .sort_values("sessions", ascending=False)
     )
+
+    risk = risk_table(df)[
+        ["src_ip", "risk_score", "risk_level"]
+    ]
+
+    g = g.merge(risk, on="src_ip", how="left")
 
     return records(g)
 
