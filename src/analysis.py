@@ -38,6 +38,69 @@ def compute_ip_risk(sessions: pd.DataFrame) -> pd.DataFrame:
     return agg.reset_index().sort_values("risk_score", ascending=False).reset_index(drop=True)
 
 
+
+def compute_attacker_dna(sessions: pd.DataFrame) -> pd.DataFrame:
+    """Build a deterministic behavioral fingerprint for each attacker IP."""
+    columns = [
+        "src_ip", "sessions", "failed_logins", "successful_sessions",
+        "commands", "download_sessions", "login_rate", "command_rate",
+        "download_rate", "persistence", "activity", "fingerprint",
+    ]
+    if sessions.empty:
+        return pd.DataFrame(columns=columns)
+
+    g = sessions.groupby("src_ip")
+    d = pd.DataFrame({
+        "sessions": g.size(),
+        "failed_logins": g["n_failed_logins"].sum(),
+        "successful_sessions": g["login_success"].sum().astype(int),
+        "commands": g["n_commands"].sum(),
+        "download_sessions": g["has_download_cmd"].sum().astype(int),
+    })
+
+    d["login_rate"] = (
+        d["successful_sessions"] / d["sessions"] * 100
+    ).round(1)
+    d["command_rate"] = (
+        d["commands"] / d["sessions"] * 100
+    ).round(1)
+    d["download_rate"] = (
+        d["download_sessions"] / d["sessions"] * 100
+    ).round(1)
+
+    max_sessions = max(float(d["sessions"].max()), 1.0)
+    max_failed = max(float(d["failed_logins"].max()), 1.0)
+    max_commands = max(float(d["commands"].max()), 1.0)
+
+    d["persistence"] = (
+        d["sessions"] / max_sessions * 100
+    ).round(1)
+    d["activity"] = (
+        (
+            d["failed_logins"] / max_failed * 50
+            + d["commands"] / max_commands * 50
+        ).clip(0, 100)
+    ).round(1)
+
+    def fingerprint(row):
+        parts = []
+        if row["failed_logins"] > 0:
+            parts.append("BF")
+        if row["successful_sessions"] > 0:
+            parts.append("AUTH")
+        if row["commands"] > 0:
+            parts.append("CMD")
+        if row["download_sessions"] > 0:
+            parts.append("DL")
+        if row["sessions"] >= max_sessions * 0.5:
+            parts.append("PERSIST")
+        return "-".join(parts) if parts else "QUIET"
+
+    d["fingerprint"] = d.apply(fingerprint, axis=1)
+    d.index.name = "src_ip"
+    return d.reset_index()[columns]
+
+
 def top_credential_pairs(n: int = 10, db_path=None) -> pd.DataFrame:
     """Most common username:password combinations tried."""
     return database.query("""
