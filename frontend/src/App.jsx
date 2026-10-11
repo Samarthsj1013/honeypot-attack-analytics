@@ -1822,6 +1822,12 @@ function AttackerMap({ data, filters }) {
 
   const [similarError, setSimilarError] = useState("");
 
+  const [intent, setIntent] = useState(null);
+
+  const [intentLoading, setIntentLoading] = useState(false);
+
+  const [intentError, setIntentError] = useState("");
+
   const preserveUnmappedSelection = useRef(false);
 
   useEffect(() => {
@@ -2055,6 +2061,39 @@ function AttackerMap({ data, filters }) {
 
     loadSimilarAttackers();
 
+  }, [selectedIp, filters]);
+
+  useEffect(() => {
+    if (!selectedIp) {
+      setIntent(null);
+      setIntentError("");
+      return;
+    }
+
+    async function loadIntent() {
+      try {
+        setIntentLoading(true);
+        setIntentError("");
+        const params = {};
+        if (filters.start) params.start = filters.start;
+        if (filters.end) params.end = filters.end;
+        if (filters.behavior) params.behavior = filters.behavior;
+
+        const response = await axios.get(
+          `${API}/api/attackers/${encodeURIComponent(selectedIp)}/intent`,
+          { params }
+        );
+        setIntent(response.data);
+      } catch (err) {
+        console.error("Failed to load attack intent:", err);
+        setIntent(null);
+        setIntentError("Unable to load inferred attack intent.");
+      } finally {
+        setIntentLoading(false);
+      }
+    }
+
+    loadIntent();
   }, [selectedIp, filters]);
 
   if (!data.length) {
@@ -2511,6 +2550,66 @@ function AttackerMap({ data, filters }) {
                 )}
 
               </div>
+
+              <section className="attacker-intent-panel">
+                <div className="attacker-profile-kicker">
+                  INFERRED ATTACK INTENT
+                </div>
+                {intentLoading ? (
+                  <div className="attacker-profile-loading">
+                    Evaluating observed honeypot events…
+                  </div>
+                ) : intentError ? (
+                  <div className="attacker-profile-error">{intentError}</div>
+                ) : intent ? (
+                  <>
+                    <h3>{intent.classification}</h3>
+                    <p>{intent.explanation}</p>
+                    <div className="attacker-intent-evidence-title">
+                      SUPPORTING EVIDENCE
+                    </div>
+                    <ul className="attacker-intent-evidence">
+                      <li>{intent.evidence.sessions} observed session(s)</li>
+                      {intent.evidence.failed_login_events > 0 && (
+                        <li>
+                          {intent.evidence.failed_login_events} failed login event(s) across {intent.evidence.sessions_with_failed_logins} session(s)
+                        </li>
+                      )}
+                      {intent.evidence.successful_login_events > 0 && (
+                        <li>
+                          {intent.evidence.successful_login_events} successful login event(s) recorded by the honeypot
+                        </li>
+                      )}
+                      {intent.evidence.command_count > 0 && (
+                        <li>{intent.evidence.command_count} observed command(s)</li>
+                      )}
+                      {intent.evidence.commands_observed.map((command) => (
+                        <li className="attacker-intent-command" key={command}>
+                          <code>{command}</code>
+                        </li>
+                      ))}
+                      {intent.evidence.download_tool_matches.length > 0 && (
+                        <li>
+                          Download tool match(es): {intent.evidence.download_tool_matches.join(", ")}
+                        </li>
+                      )}
+                      {intent.evidence.connection_only_sessions > 0 && (
+                        <li>
+                          {intent.evidence.connection_only_sessions} connection-only session(s)
+                        </li>
+                      )}
+                      {intent.evidence.recon_behavior_sessions > 0 && (
+                        <li>
+                          {intent.evidence.recon_behavior_sessions} session(s) with a scanner/recon behavior label
+                        </li>
+                      )}
+                    </ul>
+                    <p className="attacker-intent-caveat">
+                      {intent.inference_note}
+                    </p>
+                  </>
+                ) : null}
+              </section>
 
               <div className="attacker-similarity-panel">
 

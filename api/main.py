@@ -200,6 +200,19 @@ def create_app(db_path=None) -> FastAPI:
             )
         return matches
 
+    @router.get("/attackers/{src_ip}/intent")
+    def attacker_intent(
+        src_ip: str,
+        f: Filters = Depends(get_filters),
+    ) -> dict:
+        intent = service.attacker_intent(src_ip, f, db_path)
+        if intent is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Attacker IP not found for the current filters",
+            )
+        return intent
+
     @router.get("/risk-levels")
     def risk_levels(
         f: Filters = Depends(get_filters),

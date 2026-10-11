@@ -2362,6 +2362,56 @@ tbody tr:last-child td {
 
 }
 
+.attacker-intent-panel {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #17263a;
+  border-radius: 8px;
+  background: #0a121e;
+}
+
+.attacker-intent-panel h3 {
+  margin: 0 0 6px;
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+.attacker-intent-panel p {
+  margin: 0 0 10px;
+  color: #8ea2bb;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.attacker-intent-evidence-title {
+  margin-top: 10px;
+  color: #52647c;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.attacker-intent-evidence {
+  display: grid;
+  gap: 5px;
+  margin: 7px 0 10px;
+  padding-left: 16px;
+  color: #a9b8ca;
+  font-size: 10px;
+}
+
+.attacker-intent-command code {
+  color: #cbd5e1;
+  font-family: "JetBrains Mono", "Consolas", monospace;
+  overflow-wrap: anywhere;
+}
+
+.attacker-intent-panel .attacker-intent-caveat {
+  margin: 10px 0 0;
+  color: #71839a;
+  font-size: 9px;
+}
+
 .attacker-similarity-panel .attacker-profile-kicker {
 
   text-transform: uppercase;

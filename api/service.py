@@ -750,6 +750,17 @@ def attacker_dna(src_ip: str, f: Filters, db_path=None) -> dict | None:
 
     return records(attacker_dna_row)[0]
 
+def attacker_intent(src_ip: str, f: Filters, db_path=None) -> dict | None:
+    """Classify the selected attacker's intent from the currently filtered sessions."""
+    df = load_sessions(f, db_path)
+    attacker = df[df["src_ip"].astype(str) == str(src_ip)] if not df.empty else df
+    if attacker.empty:
+        return None
+    return {
+        "src_ip": str(src_ip),
+        **analysis.classify_attack_intent(attacker),
+    }
+
 def similar_attackers(src_ip: str, f: Filters, db_path=None, limit: int = 5) -> list[dict] | None:
     """Rank other attackers using normalized Attacker DNA metrics."""
     df = load_sessions(f, db_path)

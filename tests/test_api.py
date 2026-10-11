@@ -887,6 +887,44 @@ class TestAPI(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_attacker_intent_endpoint_classifies_observed_categories(self):
+        payload = self.client.get("/api/attackers/1.1.1.1/intent")
+        brute_force = self.client.get("/api/attackers/2.2.2.2/intent")
+        reconnaissance = self.client.get("/api/attackers/3.3.3.3/intent")
+
+        self.assertEqual(payload.status_code, 200)
+        self.assertEqual(payload.json()["classification"], "Payload Download Attempt")
+        self.assertEqual(payload.json()["evidence"]["download_tool_matches"], ["wget"])
+        self.assertIn("does not prove compromise", payload.json()["inference_note"])
+
+        self.assertEqual(brute_force.status_code, 200)
+        self.assertEqual(brute_force.json()["classification"], "Credential Brute Force")
+        self.assertEqual(reconnaissance.status_code, 200)
+        self.assertEqual(reconnaissance.json()["classification"], "Reconnaissance / Scanning")
+
+    def test_attacker_intent_respects_date_and_behavior_filters(self):
+        filtered = self.client.get(
+            "/api/attackers/2.2.2.2/intent",
+            params={
+                "start": "2026-01-02",
+                "end": "2026-01-02",
+                "behavior": BOT,
+            },
+        )
+        self.assertEqual(filtered.status_code, 200)
+        self.assertEqual(
+            filtered.json()["classification"],
+            "Unknown / Insufficient Evidence",
+        )
+        self.assertEqual(filtered.json()["evidence"]["failed_login_events"], 1)
+
+    def test_attacker_intent_returns_404_when_ip_is_removed_by_filter(self):
+        filtered = self.client.get(
+            "/api/attackers/1.1.1.1/intent",
+            params={"behavior": BOT},
+        )
+        self.assertEqual(filtered.status_code, 404)
+
     def test_attacker_similarity_ranks_other_ips_deterministically(self):
         first = self.client.get("/api/attackers/1.1.1.1/similar")
         second = self.client.get("/api/attackers/1.1.1.1/similar")
