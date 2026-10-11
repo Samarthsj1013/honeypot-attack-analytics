@@ -140,10 +140,6 @@ function App() {
 
   const [attackers, setAttackers] = useState([]);
 
-  const [countries, setCountries] = useState([]);
-
-  const [mapData, setMapData] = useState([]);
-
   const [hourlyData, setHourlyData] = useState([]);
 
   const [usernames, setUsernames] = useState([]);
@@ -244,10 +240,6 @@ function App() {
 
           attackersRes,
 
-          countriesRes,
-
-          mapRes,
-
           hourlyRes,
 
           usernamesRes,
@@ -267,20 +259,6 @@ function App() {
           axios.get(`${API}/api/risk-levels`, { params }),
 
           axios.get(`${API}/api/attackers`, { params }),
-
-          axios.get(`${API}/api/countries`, {
-
-            params: {
-
-              ...params,
-
-              limit: 10,
-
-            },
-
-          }),
-
-          axios.get(`${API}/api/map`, { params }),
 
           axios.get(`${API}/api/hourly`, { params }),
 
@@ -331,10 +309,6 @@ function App() {
         setRiskData(riskRes.data);
 
         setAttackers(attackersRes.data);
-
-        setCountries(countriesRes.data);
-
-        setMapData(mapRes.data);
 
         setHourlyData(hourlyRes.data);
 
@@ -1245,85 +1219,10 @@ function App() {
         </section>
 
         <section id="attack-sources" className="dashboard-grid">
-
-          <Panel
-
-            title="Attacker Origin Map"
-
-            subtitle="Approximate geographic distribution of observed attack sources"
-
-          >
-
-            <AttackerMap
-
-              data={mapData}
-
-              filters={filters}
-
-            />
-
-          </Panel>
-
+          <SourceIntelligence filters={filters} />
         </section>
 
-        <section className="dashboard-grid two-columns">
-
-          <Panel
-
-            title="Geographic Sources"
-
-            subtitle="Attacker origin summary"
-
-          >
-
-            {countries.length > 0 ? (
-
-              <div className="country-list">
-
-                {countries.map((country, index) => (
-
-                  <div
-
-                    className="country-row"
-
-                    key={`${country.country}-${index}`}
-
-                  >
-
-                    <div className="country-name">
-
-                      <Globe size={18} />
-
-                      <span>{country.country}</span>
-
-                    </div>
-
-                    <div className="country-stats">
-
-                      <strong>
-
-                        {country.sessions.toLocaleString()}
-
-                      </strong>
-
-                      <span>sessions</span>
-
-                    </div>
-
-                  </div>
-
-                ))}
-
-              </div>
-
-            ) : (
-
-              <EmptyState text="No geographic data for this filter." />
-
-            )}
-
-          </Panel>
-
+        <section className="dashboard-grid">
           <Panel
 
             title="Highest Risk Attackers"
@@ -1598,6 +1497,153 @@ function SidebarItem({ icon, label, active, href }) {
 
 }
 
+function SourceIntelligence({ filters }) {
+  const [country, setCountry] = useState("");
+  const [riskLevel, setRiskLevel] = useState("");
+  const [sortBy, setSortBy] = useState("total_events");
+  const [sortOrder, setSortOrder] = useState("desc");
+  const [page, setPage] = useState(0);
+  const [selectedAttacker, setSelectedAttacker] = useState("");
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const pageSize = 25;
+
+  useEffect(() => {
+    let active = true;
+    async function loadSources() {
+      try {
+        setLoading(true);
+        setError("");
+        const params = {
+          limit: pageSize,
+          offset: page * pageSize,
+          sort_by: sortBy,
+          sort_order: sortOrder,
+          ...filters,
+        };
+        if (!params.start) delete params.start;
+        if (!params.end) delete params.end;
+        if (!params.behavior) delete params.behavior;
+        if (country) params.country = country;
+        if (riskLevel) params.risk_level = riskLevel;
+        const response = await axios.get(`${API}/api/source-intelligence`, { params });
+        if (!Array.isArray(response.data?.sources) || !Array.isArray(response.data?.map_points)) {
+          throw new Error("Unexpected source intelligence response");
+        }
+        if (active) setData(response.data);
+      } catch (err) {
+        console.error("Failed to load source intelligence:", err);
+        if (active) {
+          setData(null);
+          setError(err.response?.data?.detail || "Unable to load attack source data.");
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    loadSources();
+    return () => { active = false; };
+  }, [filters, country, riskLevel, sortBy, sortOrder, page]);
+
+  const overview = data?.overview || {};
+  const toggleSort = (key) => {
+    if (sortBy === key) setSortOrder((current) => current === "asc" ? "desc" : "asc");
+    else { setSortBy(key); setSortOrder(key === "src_ip" || key === "country" || key === "city" ? "asc" : "desc"); }
+    setPage(0);
+  };
+  const sortButton = (label, key) => (
+    <button type="button" className="source-sort" onClick={() => toggleSort(key)}>
+      {label}{sortBy === key ? (sortOrder === "asc" ? " ↑" : " ↓") : ""}
+    </button>
+  );
+
+  return (
+    <div className="source-intelligence">
+      <div className="source-overview-grid">
+        {[
+          ["Unique source IPs", overview.unique_source_ips],
+          ["Attack events", overview.total_attack_events],
+          ["Countries represented", overview.countries_represented],
+          ["High-risk sources", overview.high_risk_sources],
+        ].map(([label, value]) => (
+          <div className="source-overview-card" key={label}>
+            <span>{label}</span><strong>{loading && !data ? "—" : Number(value || 0).toLocaleString()}</strong>
+          </div>
+        ))}
+      </div>
+
+      <div className="source-filter-bar">
+        <label>Country
+          <select value={country} onChange={(event) => { setCountry(event.target.value); setPage(0); }}>
+            <option value="">All countries</option>
+            {(data?.countries || []).map((row) => <option key={row.country} value={row.country}>{row.country}</option>)}
+          </select>
+        </label>
+        <label>Risk level
+          <select value={riskLevel} onChange={(event) => { setRiskLevel(event.target.value); setPage(0); }}>
+            <option value="">All risk levels</option>
+            {["High", "Medium", "Low", "Unknown"].map((level) => <option key={level}>{level}</option>)}
+          </select>
+        </label>
+        {(country || riskLevel) && <button type="button" onClick={() => { setCountry(""); setRiskLevel(""); setPage(0); }}>Clear source filters</button>}
+        {loading && <span className="source-loading">Updating source data…</span>}
+      </div>
+
+      {error && <div className="error-banner"><AlertTriangle size={18} /><span>{error}</span></div>}
+      {!error && data && (
+        <>
+          <div className="source-content-grid">
+            <Panel title="Country Analysis" subtitle="Event counts use the active date, behavior, country, and risk filters.">
+              {data.countries.length ? (
+                <div className="table-wrapper"><table className="source-table">
+                  <thead><tr><th>COUNTRY</th><th>SOURCE IPS</th><th>EVENTS</th><th>FAILED LOGINS</th><th>HIGH RISK</th></tr></thead>
+                  <tbody>{data.countries.map((row) => (
+                    <tr key={row.country} className={country === row.country ? "source-row-selected" : ""}>
+                      <td><button className="source-country-button" type="button" onClick={() => { setCountry(country === row.country ? "" : row.country); setPage(0); }}><Globe size={14} />{row.country}</button></td>
+                      <td>{row.unique_ips.toLocaleString()}</td><td>{row.total_events.toLocaleString()}</td>
+                      <td>{row.failed_logins.toLocaleString()}</td><td>{row.high_risk_sources.toLocaleString()}</td>
+                    </tr>
+                  ))}</tbody>
+                </table></div>
+              ) : <EmptyState text="No source or country data for these filters." />}
+            </Panel>
+
+            <Panel title="Top Attack Sources" subtitle="Sort columns to rank the filtered sources.">
+              {data.sources.length ? <>
+                <div className="table-wrapper"><table className="source-table">
+                  <thead><tr>
+                    <th>{sortButton("IP ADDRESS", "src_ip")}</th><th>{sortButton("COUNTRY / CITY", "country")}</th>
+                    <th>{sortButton("EVENTS", "total_events")}</th><th>{sortButton("FAILED", "failed_logins")}</th>
+                    <th>{sortButton("SUCCESSFUL HONEYPOT SESSIONS", "successful_sessions")}</th>
+                    <th>{sortButton("RISK", "risk_score")}</th><th>{sortButton("LAST SEEN", "last_seen")}</th>
+                  </tr></thead>
+                  <tbody>{data.sources.map((row) => <tr key={row.src_ip}>
+                    <td><button className="source-ip-button" type="button" onClick={() => setSelectedAttacker(row.src_ip)}>{row.src_ip}</button></td>
+                    <td>{row.country}{row.city ? ` / ${row.city}` : ""}</td>
+                    <td>{Number(row.total_events || 0).toLocaleString()}</td><td>{Number(row.failed_logins || 0).toLocaleString()}</td>
+                    <td>{Number(row.successful_sessions || 0).toLocaleString()}</td>
+                    <td>{row.risk_score == null ? <RiskBadge level="Unknown" /> : <><strong>{Number(row.risk_score).toFixed(1)}</strong> <RiskBadge level={row.risk_level} /></>}</td>
+                    <td>{row.last_seen || "—"}</td>
+                  </tr>)}</tbody>
+                </table></div>
+                <div className="source-pagination"><span>{data.total_sources.toLocaleString()} sources · page {page + 1}</span>
+                  <button type="button" disabled={page === 0 || loading} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>
+                  <button type="button" disabled={!data.has_more || loading} onClick={() => setPage((current) => current + 1)}>Next</button>
+                </div>
+              </> : <EmptyState text="No source IPs match these filters." />}
+            </Panel>
+          </div>
+
+          <Panel title="Attacker Origin Map" subtitle="GeoIP locations are approximate; sources without recorded coordinates are omitted.">
+            <AttackerMap data={data.map_points} filters={filters} selectedAttacker={selectedAttacker} />
+          </Panel>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* =========================================================
 
    MAP
@@ -1638,7 +1684,7 @@ function FocusMarker({
 
     : baseRadius;
 
-  const riskLevel = String(point.risk_level || "Low");
+  const riskLevel = String(point.risk_level || "Unknown");
 
   const riskColors = {
 
@@ -1663,6 +1709,14 @@ function FocusMarker({
       color: "#22c55e",
 
       glow: "#4ade80",
+
+    },
+
+    Unknown: {
+
+      color: "#64748b",
+
+      glow: "#94a3b8",
 
     },
 
@@ -1766,9 +1820,9 @@ function FocusMarker({
 
             <div>
 
-              <span>SESSIONS</span>
+              <span>ATTACK EVENTS</span>
 
-              <strong>{sessions.toLocaleString()}</strong>
+              <strong>{Number(point.total_events ?? sessions).toLocaleString()}</strong>
 
             </div>
 
@@ -2161,7 +2215,7 @@ function ThreatAlerts({ filters, onSelectAttacker }) {
   );
 }
 
-function AttackerMap({ data, filters }) {
+function AttackerMap({ data, filters, selectedAttacker = "" }) {
 
   const [selectedIp, setSelectedIp] = useState(null);
 
@@ -2212,6 +2266,12 @@ function AttackerMap({ data, filters }) {
   const [campaignDetailError, setCampaignDetailError] = useState("");
 
   const preserveUnmappedSelection = useRef(false);
+
+  useEffect(() => {
+    if (!selectedAttacker) return;
+    preserveUnmappedSelection.current = !data.some((point) => point.src_ip === selectedAttacker);
+    setSelectedIp(selectedAttacker);
+  }, [selectedAttacker, data]);
 
   useEffect(() => {
     async function loadCampaigns() {
@@ -2600,7 +2660,7 @@ function AttackerMap({ data, filters }) {
 
         {data.map((point) => {
 
-          const sessions = Number(point.sessions || 0);
+          const sessions = Number(point.total_events ?? point.sessions ?? 0);
 
           const failed = Number(point.failed_logins || 0);
 

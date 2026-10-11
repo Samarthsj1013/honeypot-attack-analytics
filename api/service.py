@@ -446,6 +446,112 @@ def countries(df: pd.DataFrame, limit: int = 10) -> list[dict]:
 
     return records(d)
 
+def source_intelligence(
+    f: Filters,
+    db_path=None,
+    *,
+    country: str | None = None,
+    risk_level: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    sort_by: str = "total_events",
+    sort_order: str = "desc",
+) -> dict:
+    """Aggregate event-backed source activity and filtered session risk."""
+    sessions = load_sessions(f, db_path)
+    risk = risk_table(sessions)
+    risk_by_ip = {
+        str(row["src_ip"]): {
+            "risk_score": float(row["risk_score"]),
+            "risk_level": str(row["risk_level"]),
+            "sessions": int(row["sessions"]),
+            "successful_sessions": int(row["successful_sessions"]),
+        }
+        for _, row in risk.iterrows()
+    }
+
+    clauses, params = _filters(f, "e.timestamp")
+    clauses.append("e.src_ip IS NOT NULL")
+    where = " AND ".join(clauses) if clauses else "1 = 1"
+    event_rows = database.query(
+        f"""
+        SELECT e.src_ip,
+               COALESCE(NULLIF(TRIM(i.country), ''), 'Unknown') AS country,
+               i.city,
+               COUNT(*) AS total_events,
+               SUM(CASE WHEN e.eventid = 'cowrie.login.failed' THEN 1 ELSE 0 END) AS failed_logins,
+               MAX(e.timestamp) AS last_seen,
+               i.latitude, i.longitude
+        FROM events e
+        LEFT JOIN session_clusters c ON e.session = c.session
+        LEFT JOIN ip_intel i ON e.src_ip = i.src_ip
+        WHERE {where}
+        GROUP BY e.src_ip
+        """,
+        tuple(params),
+        db_path,
+    )
+    sources = records(event_rows)
+    for item in sources:
+        score = risk_by_ip.get(str(item["src_ip"]))
+        item.update(score or {
+            "risk_score": None,
+            "risk_level": "Unknown",
+            "sessions": 0,
+            "successful_sessions": 0,
+        })
+    if country:
+        sources = [item for item in sources if item["country"] == country]
+    if risk_level:
+        sources = [item for item in sources if item["risk_level"] == risk_level]
+    sortable = {
+        "src_ip": lambda item: str(item["src_ip"]),
+        "country": lambda item: str(item["country"] or "Unknown").casefold(),
+        "city": lambda item: str(item["city"] or "").casefold(),
+        "total_events": lambda item: int(item["total_events"] or 0),
+        "failed_logins": lambda item: int(item["failed_logins"] or 0),
+        "successful_sessions": lambda item: int(item["successful_sessions"] or 0),
+        "risk_score": lambda item: float(item["risk_score"] or 0),
+        "last_seen": lambda item: str(item["last_seen"] or ""),
+    }
+    sorter = sortable.get(sort_by, sortable["total_events"])
+    sources.sort(key=lambda item: (sorter(item), str(item["src_ip"])), reverse=sort_order == "desc")
+
+    # Country aggregates derive from the same event rows and source filters.
+    country_rows = {}
+    for item in sources:
+        aggregate = country_rows.setdefault(item["country"], {
+            "country": item["country"], "unique_ips": 0, "total_events": 0,
+            "failed_logins": 0, "high_risk_sources": 0,
+        })
+        aggregate["unique_ips"] += 1
+        aggregate["total_events"] += int(item["total_events"] or 0)
+        aggregate["failed_logins"] += int(item["failed_logins"] or 0)
+        aggregate["high_risk_sources"] += int(item["risk_level"] == "High")
+    country_list = sorted(country_rows.values(), key=lambda row: (-row["total_events"], row["country"].casefold()))
+
+    source_total = len(sources)
+    paged = sources[offset:offset + limit]
+    map_points = [
+        item for item in sources
+        if item["latitude"] is not None and item["longitude"] is not None
+    ]
+    return {
+        "overview": {
+            "unique_source_ips": source_total,
+            "total_attack_events": sum(int(item["total_events"] or 0) for item in sources),
+            "countries_represented": len(country_rows),
+            "high_risk_sources": sum(item["risk_level"] == "High" for item in sources),
+        },
+        "countries": country_list,
+        "sources": paged,
+        "map_points": map_points,
+        "total_sources": source_total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(paged) < source_total,
+    }
+
 def map_points(df: pd.DataFrame) -> list[dict]:
 
     """One point per attacker IP with coordinates and backend risk data."""

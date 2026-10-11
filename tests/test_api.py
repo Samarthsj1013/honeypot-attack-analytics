@@ -614,6 +614,63 @@ class TestAPI(unittest.TestCase):
             attacker["risk_level"],
         )
 
+    def test_source_intelligence_uses_event_counts_and_country_aggregates(self):
+        response = self.client.get("/api/source-intelligence")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["overview"]["unique_source_ips"], 3)
+        self.assertEqual(data["overview"]["total_attack_events"], 16)
+        self.assertEqual(data["overview"]["countries_represented"], 2)
+        countries = {row["country"]: row for row in data["countries"]}
+        self.assertEqual(countries["Germany"]["unique_ips"], 1)
+        self.assertEqual(countries["Germany"]["total_events"], 6)
+        self.assertEqual(countries["Unknown"]["unique_ips"], 2)
+        self.assertEqual(countries["Unknown"]["failed_logins"], 4)
+        self.assertEqual(len(data["map_points"]), 1)
+        self.assertEqual(data["map_points"][0]["src_ip"], "1.1.1.1")
+        self.assertEqual(data["map_points"][0]["total_events"], 6)
+
+    def test_source_intelligence_filters_and_paginates_consistently(self):
+        response = self.client.get("/api/source-intelligence", params={
+            "start": "2026-01-02", "end": "2026-01-02", "behavior": BOT,
+            "country": "Unknown", "limit": 1, "offset": 0,
+            "sort_by": "src_ip", "sort_order": "asc",
+        })
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["overview"]["unique_source_ips"], 1)
+        self.assertEqual(data["overview"]["total_attack_events"], 3)
+        self.assertEqual(data["sources"][0]["src_ip"], "2.2.2.2")
+        self.assertEqual(data["sources"][0]["last_seen"], "2026-01-02 10:00:01")
+
+        first_page = self.client.get("/api/source-intelligence", params={
+            "limit": 1,
+        }).json()
+        self.assertTrue(first_page["has_more"])
+        risk_level = self.client.get("/api/attackers").json()[0]["risk_level"]
+        risk_filtered = self.client.get("/api/source-intelligence", params={
+            "risk_level": risk_level, "limit": 1,
+        }).json()
+        self.assertEqual(len(risk_filtered["sources"]), 1)
+        self.assertEqual(risk_filtered["sources"][0]["risk_level"], risk_level)
+
+    def test_source_intelligence_empty_results_and_unknown_geo_are_safe(self):
+        data = self.client.get("/api/source-intelligence", params={
+            "behavior": "does-not-exist",
+        }).json()
+        self.assertEqual(data["overview"]["unique_source_ips"], 0)
+        self.assertEqual(data["overview"]["total_attack_events"], 0)
+        self.assertEqual(data["countries"], [])
+        self.assertEqual(data["sources"], [])
+        self.assertEqual(data["map_points"], [])
+
+        unknown = self.client.get("/api/source-intelligence", params={
+            "country": "Unknown",
+        }).json()
+        self.assertEqual({row["country"] for row in unknown["sources"]}, {"Unknown"})
+        self.assertTrue(all(row["latitude"] is None and row["longitude"] is None
+                            for row in unknown["sources"]))
+
     def test_risk_level_counts_match_attackers(self):
         attackers = self.client.get(
             "/api/attackers",

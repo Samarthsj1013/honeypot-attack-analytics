@@ -149,6 +149,24 @@ def create_app(db_path=None) -> FastAPI:
             limit,
         )
 
+    @router.get("/source-intelligence")
+    def source_intelligence(
+        f: Filters = Depends(get_filters),
+        country: str | None = Query(default=None, max_length=120),
+        risk_level: Literal["Low", "Medium", "High", "Unknown"] | None = None,
+        limit: int = Query(25, ge=1, le=100),
+        offset: int = Query(0, ge=0),
+        sort_by: Literal[
+            "src_ip", "country", "city", "total_events", "failed_logins",
+            "successful_sessions", "risk_score", "last_seen",
+        ] = "total_events",
+        sort_order: Literal["asc", "desc"] = "desc",
+    ) -> dict:
+        return service.source_intelligence(
+            f, db_path, country=country, risk_level=risk_level,
+            limit=limit, offset=offset, sort_by=sort_by, sort_order=sort_order,
+        )
+
     @router.get("/threat-hunt")
     def threat_hunt(
         f: Filters = Depends(get_filters),
