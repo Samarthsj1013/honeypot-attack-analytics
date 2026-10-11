@@ -887,6 +887,49 @@ class TestAPI(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_attacker_similarity_ranks_other_ips_deterministically(self):
+        first = self.client.get("/api/attackers/1.1.1.1/similar")
+        second = self.client.get("/api/attackers/1.1.1.1/similar")
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.json(), second.json())
+        rows = first.json()
+        self.assertLessEqual(len(rows), 5)
+        self.assertNotIn("1.1.1.1", [row["src_ip"] for row in rows])
+        self.assertEqual(
+            rows,
+            sorted(rows, key=lambda row: (-row["similarity_pct"], row["src_ip"])),
+        )
+        self.assertTrue(all(0 <= row["similarity_pct"] <= 100 for row in rows))
+        self.assertTrue(all(row["risk_level"] and row["reasons"] for row in rows))
+
+    def test_attacker_similarity_respects_date_and_behavior_filters(self):
+        dated = self.client.get(
+            "/api/attackers/1.1.1.1/similar",
+            params={"start": "2026-01-01", "end": "2026-01-01"},
+        )
+        self.assertEqual(dated.status_code, 200)
+        self.assertEqual(
+            {row["src_ip"] for row in dated.json()},
+            {"2.2.2.2", "3.3.3.3"},
+        )
+
+        behavior = self.client.get(
+            "/api/attackers/2.2.2.2/similar",
+            params={"behavior": BOT},
+        )
+        self.assertEqual(behavior.status_code, 200)
+        self.assertEqual(behavior.json(), [])
+
+    def test_attacker_similarity_returns_404_for_unknown_or_filtered_ip(self):
+        unknown = self.client.get("/api/attackers/9.9.9.9/similar")
+        filtered = self.client.get(
+            "/api/attackers/1.1.1.1/similar",
+            params={"behavior": BOT},
+        )
+        self.assertEqual(unknown.status_code, 404)
+        self.assertEqual(filtered.status_code, 404)
+
     def test_missing_database_returns_503(self):
         client = TestClient(
             create_app(

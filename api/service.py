@@ -750,6 +750,95 @@ def attacker_dna(src_ip: str, f: Filters, db_path=None) -> dict | None:
 
     return records(attacker_dna_row)[0]
 
+def similar_attackers(src_ip: str, f: Filters, db_path=None, limit: int = 5) -> list[dict] | None:
+    """Rank other attackers using normalized Attacker DNA metrics."""
+    df = load_sessions(f, db_path)
+    if df.empty or str(src_ip) not in set(df["src_ip"].astype(str)):
+        return None
+
+    dna = analysis.compute_attacker_dna(df)
+    if dna.empty:
+        return None
+    dna["src_ip"] = dna["src_ip"].astype(str)
+    selected = dna[dna["src_ip"] == str(src_ip)]
+    if selected.empty:
+        return None
+
+    metric_labels = {
+        "login_rate": "successful login rate",
+        "command_rate": "command rate",
+        "download_rate": "download rate",
+        "persistence": "persistence",
+        "activity": "activity",
+    }
+    normalized = pd.DataFrame(index=dna.index)
+    for metric in metric_labels:
+        values = pd.to_numeric(dna[metric], errors="coerce")
+        minimum, maximum = values.min(), values.max()
+        if pd.notna(minimum) and pd.notna(maximum) and maximum > minimum:
+            normalized[metric] = (values - minimum) / (maximum - minimum)
+
+    behavior_by_ip = (
+        df.assign(behavior=df["behavior"].fillna("Unclustered"))
+        .groupby("src_ip")["behavior"]
+        .agg(lambda values: set(values.astype(str)))
+        if "behavior" in df else {}
+    )
+    risk_by_ip = risk_table(df).set_index("src_ip")
+    selected_row = selected.iloc[0]
+    selected_index = selected.index[0]
+    selected_ip = str(src_ip)
+    selected_behaviors = behavior_by_ip.get(selected_ip, set())
+    selected_tags = set(str(selected_row["fingerprint"]).split("-")) - {"QUIET"}
+
+    matches = []
+    for index, candidate in dna.iterrows():
+        candidate_ip = str(candidate["src_ip"])
+        if candidate_ip == selected_ip:
+            continue
+        scores = (
+            1 - (normalized.loc[selected_index] - normalized.loc[index]).abs()
+        ).dropna()
+        if scores.empty:
+            candidate_tags = set(str(candidate["fingerprint"]).split("-")) - {"QUIET"}
+            union = selected_tags | candidate_tags
+            score = 100.0 * len(selected_tags & candidate_tags) / len(union) if union else 0.0
+        else:
+            score = float(scores.mean() * 100)
+
+        reasons = []
+        shared_behaviors = sorted(
+            selected_behaviors & behavior_by_ip.get(candidate_ip, set())
+        )
+        if shared_behaviors:
+            reasons.append("Shared behavior: " + ", ".join(shared_behaviors))
+        candidate_tags = set(str(candidate["fingerprint"]).split("-")) - {"QUIET"}
+        shared_tags = sorted(selected_tags & candidate_tags)
+        if shared_tags:
+            reasons.append("Shared DNA traits: " + ", ".join(shared_tags))
+        if not scores.empty:
+            close_metrics = scores[scores >= 0.75].sort_values(ascending=False).index[:3]
+            for metric in close_metrics:
+                reasons.append(
+                    f"Similar {metric_labels[metric]} "
+                    f"({float(selected_row[metric]):.1f}% vs {float(candidate[metric]):.1f}%)"
+                )
+            if not reasons:
+                closest = scores.idxmax()
+                reasons.append(f"Closest metric: {metric_labels[closest]}")
+        if not reasons:
+            reasons.append("No shared DNA traits; ranked by normalized behavioral metrics")
+
+        risk = risk_by_ip.loc[candidate_ip]
+        matches.append({
+            "src_ip": candidate_ip,
+            "similarity_pct": round(score, 1),
+            "risk_score": float(risk["risk_score"]),
+            "risk_level": str(risk["risk_level"]),
+            "reasons": reasons,
+        })
+    return sorted(matches, key=lambda row: (-row["similarity_pct"], row["src_ip"]))[:limit]
+
 def risk_levels(df: pd.DataFrame) -> list[dict]:
 
     risk = risk_table(df)

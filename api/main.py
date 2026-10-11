@@ -187,6 +187,19 @@ def create_app(db_path=None) -> FastAPI:
 
         return dna
 
+    @router.get("/attackers/{src_ip}/similar")
+    def similar_attackers(
+        src_ip: str,
+        f: Filters = Depends(get_filters),
+    ) -> list[dict]:
+        matches = service.similar_attackers(src_ip, f, db_path)
+        if matches is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Attacker IP not found for the current filters",
+            )
+        return matches
+
     @router.get("/risk-levels")
     def risk_levels(
         f: Filters = Depends(get_filters),

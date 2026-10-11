@@ -1,8 +1,4 @@
-// frontend/src/App.jsx
-
-
-
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import axios from "axios";
 
@@ -72,11 +68,7 @@ import {
 
 } from "recharts";
 
-
-
-const API = "http\://127.0.0.1:8000";
-
-
+const API = "http://127.0.0.1:8000";
 
 function KpiCard({ icon, label, value, danger, success }) {
 
@@ -98,13 +90,9 @@ function KpiCard({ icon, label, value, danger, success }) {
 
       </div>
 
-
-
       <div className="kpi-content">
 
         <div className="kpi-label">{label}</div>
-
-
 
         <div className="kpi-value">
 
@@ -124,8 +112,6 @@ function KpiCard({ icon, label, value, danger, success }) {
 
 }
 
-
-
 function RiskBadge({ level }) {
 
   return (
@@ -139,8 +125,6 @@ function RiskBadge({ level }) {
   );
 
 }
-
-
 
 function App() {
 
@@ -168,15 +152,11 @@ function App() {
 
   const [commands, setCommands] = useState([]);
 
-
-
   const [startDate, setStartDate] = useState("");
 
   const [endDate, setEndDate] = useState("");
 
   const [selectedBehavior, setSelectedBehavior] = useState("");
-
-
 
   const [filters, setFilters] = useState({
 
@@ -188,19 +168,13 @@ function App() {
 
   });
 
-
-
   const [loading, setLoading] = useState(true);
 
   const [error, setError] = useState("");
 
-
-
   const buildParams = () => {
 
     const params = {};
-
-
 
     if (filters.start) {
 
@@ -208,15 +182,11 @@ function App() {
 
     }
 
-
-
     if (filters.end) {
 
       params.end = filters.end;
 
     }
-
-
 
     if (filters.behavior) {
 
@@ -224,13 +194,9 @@ function App() {
 
     }
 
-
-
     return params;
 
   };
-
-
 
   useEffect(() => {
 
@@ -250,13 +216,9 @@ function App() {
 
     }
 
-
-
     loadMeta();
 
   }, []);
-
-
 
   useEffect(() => {
 
@@ -268,11 +230,7 @@ function App() {
 
         setError("");
 
-
-
         const params = buildParams();
-
-
 
         const [
 
@@ -364,8 +322,6 @@ function App() {
 
         ]);
 
-
-
         setOverview(overviewRes.data);
 
         setTimeline(timelineRes.data);
@@ -392,8 +348,6 @@ function App() {
 
         console.error(err);
 
-
-
         if (err.response?.data?.detail) {
 
           setError(err.response.data.detail);
@@ -416,13 +370,9 @@ function App() {
 
     }
 
-
-
     loadDashboard();
 
   }, [filters]);
-
-
 
   const applyFilters = () => {
 
@@ -438,8 +388,6 @@ function App() {
 
   };
 
-
-
   const resetFilters = () => {
 
     setStartDate("");
@@ -447,8 +395,6 @@ function App() {
     setEndDate("");
 
     setSelectedBehavior("");
-
-
 
     setFilters({
 
@@ -461,8 +407,6 @@ function App() {
     });
 
   };
-
-
 
   const timelineChart = Object.values(
 
@@ -480,19 +424,13 @@ function App() {
 
       }
 
-
-
       acc[item.day].sessions += item.sessions;
-
-
 
       return acc;
 
     }, {})
 
   );
-
-
 
   const riskChart = riskData.map((item) => ({
 
@@ -501,8 +439,6 @@ function App() {
     value: item.ips,
 
   }));
-
-
 
   const riskColors = {
 
@@ -514,8 +450,6 @@ function App() {
 
   };
 
-
-
   const formattedHourlyData = hourlyData.map((item) => ({
 
     ...item,
@@ -524,8 +458,6 @@ function App() {
 
   }));
 
-
-
   if (loading && !overview) {
 
     return (
@@ -533,8 +465,6 @@ function App() {
       <div className="app-shell">
 
         <Sidebar />
-
-
 
         <main className="main-content">
 
@@ -554,15 +484,11 @@ function App() {
 
   }
 
-
-
   return (
 
     <div className="app-shell">
 
       <Sidebar />
-
-
 
       <main className="main-content">
 
@@ -576,8 +502,6 @@ function App() {
 
           </div>
 
-
-
           <div className="live-indicator">
 
             <span className="live-dot" />
@@ -588,15 +512,11 @@ function App() {
 
         </header>
 
-
-
         <section className="monitoring-banner">
 
           <div>
 
             <div className="section-eyebrow">THREAT MONITORING</div>
-
-
 
             <h2>
 
@@ -606,15 +526,11 @@ function App() {
 
           </div>
 
-
-
           <div className="time-range">
 
             <div>
 
               <span>First seen</span>
-
-
 
               <strong>
 
@@ -624,13 +540,9 @@ function App() {
 
             </div>
 
-
-
             <div>
 
               <span>Last seen</span>
-
-
 
               <strong>
 
@@ -644,15 +556,11 @@ function App() {
 
         </section>
 
-
-
         <section className="filter-bar">
 
           <div className="filter-group">
 
             <label>Start Date</label>
-
-
 
             <input
 
@@ -670,13 +578,9 @@ function App() {
 
           </div>
 
-
-
           <div className="filter-group">
 
             <label>End Date</label>
-
-
 
             <input
 
@@ -694,13 +598,9 @@ function App() {
 
           </div>
 
-
-
           <div className="filter-group">
 
             <label>Behavior</label>
-
-
 
             <select
 
@@ -716,8 +616,6 @@ function App() {
 
               <option value="">All Behaviors</option>
 
-
-
               {meta?.behaviors?.map((behavior) => (
 
                 <option key={behavior} value={behavior}>
@@ -732,8 +630,6 @@ function App() {
 
           </div>
 
-
-
           <button
 
             className="filter-button"
@@ -745,8 +641,6 @@ function App() {
             Apply Filters
 
           </button>
-
-
 
           <button
 
@@ -762,8 +656,6 @@ function App() {
 
         </section>
 
-
-
         {error && (
 
           <div className="error-banner">
@@ -776,15 +668,11 @@ function App() {
 
         )}
 
-
-
         {(filters.start || filters.end || filters.behavior) && (
 
           <div className="active-filter">
 
             <span>FILTERED VIEW</span>
-
-
 
             {filters.start && (
 
@@ -796,8 +684,6 @@ function App() {
 
             )}
 
-
-
             {filters.end && (
 
               <span>
@@ -807,8 +693,6 @@ function App() {
               </span>
 
             )}
-
-
 
             {filters.behavior && (
 
@@ -824,8 +708,6 @@ function App() {
 
         )}
 
-
-
         <section className="kpi-grid">
 
           <KpiCard
@@ -838,8 +720,6 @@ function App() {
 
           />
 
-
-
           <KpiCard
 
             icon={<Bot />}
@@ -850,8 +730,6 @@ function App() {
 
           />
 
-
-
           <KpiCard
 
             icon={<Users />}
@@ -861,8 +739,6 @@ function App() {
             value={overview?.unique_ips}
 
           />
-
-
 
           <KpiCard
 
@@ -875,8 +751,6 @@ function App() {
             danger
 
           />
-
-
 
           <KpiCard
 
@@ -891,8 +765,6 @@ function App() {
           />
 
         </section>
-
-
 
         <section className="dashboard-grid two-columns">
 
@@ -920,8 +792,6 @@ function App() {
 
                     />
 
-
-
                     <XAxis
 
                       dataKey="day"
@@ -938,8 +808,6 @@ function App() {
 
                     />
 
-
-
                     <YAxis
 
                       stroke="#61738e"
@@ -953,8 +821,6 @@ function App() {
                       }}
 
                     />
-
-
 
                     <Tooltip
 
@@ -971,8 +837,6 @@ function App() {
                       }}
 
                     />
-
-
 
                     <Line
 
@@ -1013,8 +877,6 @@ function App() {
             </div>
 
           </Panel>
-
-
 
           <Panel
 
@@ -1066,8 +928,6 @@ function App() {
 
                     </Pie>
 
-
-
                     <Tooltip
 
                       contentStyle={{
@@ -1083,8 +943,6 @@ function App() {
                       }}
 
                     />
-
-
 
                     <Legend
 
@@ -1126,8 +984,6 @@ function App() {
 
         </section>
 
-
-
         <section className="dashboard-grid">
 
           <Panel
@@ -1154,8 +1010,6 @@ function App() {
 
                     />
 
-
-
                     <XAxis
 
                       dataKey="hourLabel"
@@ -1172,8 +1026,6 @@ function App() {
 
                     />
 
-
-
                     <YAxis
 
                       stroke="#61738e"
@@ -1187,8 +1039,6 @@ function App() {
                       }}
 
                     />
-
-
 
                     <Tooltip
 
@@ -1205,8 +1055,6 @@ function App() {
                       }}
 
                     />
-
-
 
                     <Bar
 
@@ -1233,8 +1081,6 @@ function App() {
           </Panel>
 
         </section>
-
-
 
         <section
 
@@ -1268,8 +1114,6 @@ function App() {
 
                     />
 
-
-
                     <XAxis
 
                       dataKey="behavior"
@@ -1286,8 +1130,6 @@ function App() {
 
                     />
 
-
-
                     <YAxis
 
                       stroke="#61738e"
@@ -1301,8 +1143,6 @@ function App() {
                       }}
 
                     />
-
-
 
                     <Tooltip
 
@@ -1319,8 +1159,6 @@ function App() {
                       }}
 
                     />
-
-
 
                     <Bar
 
@@ -1346,8 +1184,6 @@ function App() {
 
           </Panel>
 
-
-
           <Panel
 
             title="Top Attack Sources"
@@ -1361,8 +1197,6 @@ function App() {
           </Panel>
 
         </section>
-
-
 
         <section
 
@@ -1384,8 +1218,6 @@ function App() {
 
           />
 
-
-
           <CredentialPanel
 
             title="Top Passwords"
@@ -1397,8 +1229,6 @@ function App() {
             valueLabel="PASSWORD"
 
           />
-
-
 
           <CredentialPanel
 
@@ -1413,8 +1243,6 @@ function App() {
           />
 
         </section>
-
-
 
         <section id="attack-sources" className="dashboard-grid">
 
@@ -1437,8 +1265,6 @@ function App() {
           </Panel>
 
         </section>
-
-
 
         <section className="dashboard-grid two-columns">
 
@@ -1468,13 +1294,9 @@ function App() {
 
                       <Globe size={18} />
 
-
-
                       <span>{country.country}</span>
 
                     </div>
-
-
 
                     <div className="country-stats">
 
@@ -1483,8 +1305,6 @@ function App() {
                         {country.sessions.toLocaleString()}
 
                       </strong>
-
-
 
                       <span>sessions</span>
 
@@ -1503,8 +1323,6 @@ function App() {
             )}
 
           </Panel>
-
-
 
           <Panel
 
@@ -1532,8 +1350,6 @@ function App() {
 
                       <strong>{attacker.src_ip}</strong>
 
-
-
                       <span>
 
                         {attacker.sessions.toLocaleString()} sessions
@@ -1542,11 +1358,7 @@ function App() {
 
                     </div>
 
-
-
                     <RiskBadge level={attacker.risk_level} />
-
-
 
                     <strong className="risk-score">
 
@@ -1570,8 +1382,6 @@ function App() {
 
         </section>
 
-
-
         <footer className="dashboard-footer">
 
           <div>Honeypot Attack Analytics</div>
@@ -1588,21 +1398,15 @@ function App() {
 
 }
 
-
-
 /* =========================================================
 
    SIDEBAR
 
    ========================================================= */
 
-
-
 function Sidebar() {
 
   const [activeSection, setActiveSection] = useState("overview");
-
-
 
   useEffect(() => {
 
@@ -1618,21 +1422,15 @@ function Sidebar() {
 
     ];
 
-
-
     const observers = sections.map((sectionId) => {
 
       const element = document.getElementById(sectionId);
-
-
 
       if (!element) {
 
         return null;
 
       }
-
-
 
       const observer = new IntersectionObserver(
 
@@ -1643,8 +1441,6 @@ function Sidebar() {
             (entry) => entry.isIntersecting
 
           );
-
-
 
           if (visible) {
 
@@ -1664,17 +1460,11 @@ function Sidebar() {
 
       );
 
-
-
       observer.observe(element);
-
-
 
       return observer;
 
     });
-
-
 
     return () => {
 
@@ -1688,8 +1478,6 @@ function Sidebar() {
 
   }, []);
 
-
-
   return (
 
     <aside className="sidebar">
@@ -1702,13 +1490,9 @@ function Sidebar() {
 
         </div>
 
-
-
         <div>
 
           <div className="brand-title">Honeypot</div>
-
-
 
           <div className="brand-subtitle">
 
@@ -1719,8 +1503,6 @@ function Sidebar() {
         </div>
 
       </div>
-
-
 
       <nav className="sidebar-nav">
 
@@ -1736,8 +1518,6 @@ function Sidebar() {
 
         />
 
-
-
         <SidebarItem
 
           icon={<ShieldAlert />}
@@ -1750,8 +1530,6 @@ function Sidebar() {
 
         />
 
-
-
         <SidebarItem
 
           icon={<KeyRound />}
@@ -1763,8 +1541,6 @@ function Sidebar() {
           active={activeSection === "credentials"}
 
         />
-
-
 
         <SidebarItem
 
@@ -1780,13 +1556,9 @@ function Sidebar() {
 
       </nav>
 
-
-
       <div className="system-status">
 
         <div className="status-dot" />
-
-
 
         <div>
 
@@ -1803,8 +1575,6 @@ function Sidebar() {
   );
 
 }
-
-
 
 function SidebarItem({ icon, label, active, href }) {
 
@@ -1828,15 +1598,11 @@ function SidebarItem({ icon, label, active, href }) {
 
 }
 
-
-
 /* =========================================================
 
    MAP
 
    ========================================================= */
-
-
 
 function FocusMarker({
 
@@ -1854,13 +1620,9 @@ function FocusMarker({
 
   const map = useMap();
 
-
-
   const latitude = Number(point.latitude);
 
   const longitude = Number(point.longitude);
-
-
 
   const baseRadius = Math.max(
 
@@ -1870,19 +1632,13 @@ function FocusMarker({
 
   );
 
-
-
   const radius = selected
 
     ? Math.min(baseRadius + 4, 19)
 
     : baseRadius;
 
-
-
   const riskLevel = String(point.risk_level || "Low");
-
-
 
   const riskColors = {
 
@@ -1912,17 +1668,11 @@ function FocusMarker({
 
   };
 
-
-
   const riskColor = riskColors[riskLevel] || riskColors.Low;
-
-
 
   const handleClick = () => {
 
     onSelect(point.src_ip);
-
-
 
     map.flyTo(
 
@@ -1939,8 +1689,6 @@ function FocusMarker({
     );
 
   };
-
-
 
   return (
 
@@ -1982,8 +1730,6 @@ function FocusMarker({
 
             </div>
 
-
-
             <span
 
               className="map-popup-risk"
@@ -2004,8 +1750,6 @@ function FocusMarker({
 
           </div>
 
-
-
           <div className="map-popup-location">
 
             {point.city && point.country
@@ -2016,11 +1760,7 @@ function FocusMarker({
 
           </div>
 
-
-
           <div className="map-popup-divider" />
-
-
 
           <div className="map-popup-stat-grid">
 
@@ -2032,8 +1772,6 @@ function FocusMarker({
 
             </div>
 
-
-
             <div>
 
               <span>FAILED LOGINS</span>
@@ -2043,8 +1781,6 @@ function FocusMarker({
             </div>
 
           </div>
-
-
 
           <div className="map-popup-note">
 
@@ -2062,11 +1798,11 @@ function FocusMarker({
 
 }
 
-
-
 function AttackerMap({ data, filters }) {
 
   const [selectedIp, setSelectedIp] = useState(null);
+
+  const [tileUnavailable, setTileUnavailable] = useState(false);
 
   const [profile, setProfile] = useState(null);
 
@@ -2080,7 +1816,13 @@ function AttackerMap({ data, filters }) {
 
   const [dnaError, setDnaError] = useState("");
 
+  const [similarAttackers, setSimilarAttackers] = useState([]);
 
+  const [similarLoading, setSimilarLoading] = useState(false);
+
+  const [similarError, setSimilarError] = useState("");
+
+  const preserveUnmappedSelection = useRef(false);
 
   useEffect(() => {
 
@@ -2090,17 +1832,21 @@ function AttackerMap({ data, filters }) {
 
     }
 
-
-
     const attackerStillVisible = data.some(
 
       (point) => point.src_ip === selectedIp
 
     );
 
-
-
     if (!attackerStillVisible) {
+
+      if (preserveUnmappedSelection.current) {
+
+        preserveUnmappedSelection.current = false;
+
+        return;
+
+      }
 
       setSelectedIp(null);
 
@@ -2120,8 +1866,6 @@ function AttackerMap({ data, filters }) {
 
   }, [data, selectedIp]);
 
-
-
   useEffect(() => {
 
     if (!selectedIp) {
@@ -2134,8 +1878,6 @@ function AttackerMap({ data, filters }) {
 
     }
 
-
-
     async function loadProfile() {
 
       try {
@@ -2144,19 +1886,13 @@ function AttackerMap({ data, filters }) {
 
         setProfileError("");
 
-
-
         const params = {};
-
-
 
         if (filters.start) params.start = filters.start;
 
         if (filters.end) params.end = filters.end;
 
         if (filters.behavior) params.behavior = filters.behavior;
-
-
 
         const response = await axios.get(
 
@@ -2165,8 +1901,6 @@ function AttackerMap({ data, filters }) {
           { params }
 
         );
-
-
 
         setProfile(response.data);
 
@@ -2186,13 +1920,9 @@ function AttackerMap({ data, filters }) {
 
     }
 
-
-
     loadProfile();
 
   }, [selectedIp, filters]);
-
-
 
   useEffect(() => {
 
@@ -2206,8 +1936,6 @@ function AttackerMap({ data, filters }) {
 
     }
 
-
-
     async function loadDna() {
 
       try {
@@ -2216,19 +1944,13 @@ function AttackerMap({ data, filters }) {
 
         setDnaError("");
 
-
-
         const params = {};
-
-
 
         if (filters.start) params.start = filters.start;
 
         if (filters.end) params.end = filters.end;
 
         if (filters.behavior) params.behavior = filters.behavior;
-
-
 
         const response = await axios.get(
 
@@ -2241,8 +1963,6 @@ function AttackerMap({ data, filters }) {
           { params }
 
         );
-
-
 
         setDna(response.data);
 
@@ -2262,13 +1982,80 @@ function AttackerMap({ data, filters }) {
 
     }
 
-
-
     loadDna();
 
   }, [selectedIp, filters]);
 
+  useEffect(() => {
 
+    if (!selectedIp) {
+
+      setSimilarAttackers([]);
+
+      setSimilarError("");
+
+      return;
+
+    }
+
+    async function loadSimilarAttackers() {
+
+      try {
+
+        setSimilarLoading(true);
+
+        setSimilarError("");
+
+        const params = {};
+
+        if (filters.start) params.start = filters.start;
+
+        if (filters.end) params.end = filters.end;
+
+        if (filters.behavior) params.behavior = filters.behavior;
+
+        const response = await axios.get(
+
+          `${API}/api/attackers/${encodeURIComponent(selectedIp)}/similar`,
+
+          { params }
+
+        );
+
+        if (!Array.isArray(response.data)) {
+
+          throw new Error("Unexpected similarity response format");
+
+        }
+
+        setSimilarAttackers(response.data);
+
+      } catch (err) {
+
+        console.error("Failed to load similar attackers:", err);
+
+        setSimilarAttackers([]);
+
+        const detail = err.response?.data?.detail;
+        if (err.response?.status === 404 && detail === "Not Found") {
+          setSimilarError(
+            "The API server is outdated. Stop it and restart run_api.py from D:\\Desktop\\honeypot-attack-analytics-main."
+          );
+        } else {
+          setSimilarError("Unable to load similar attackers.");
+        }
+
+      } finally {
+
+        setSimilarLoading(false);
+
+      }
+
+    }
+
+    loadSimilarAttackers();
+
+  }, [selectedIp, filters]);
 
   if (!data.length) {
 
@@ -2279,8 +2066,6 @@ function AttackerMap({ data, filters }) {
     );
 
   }
-
-
 
   return (
 
@@ -2305,22 +2090,19 @@ function AttackerMap({ data, filters }) {
       >
 
         <TileLayer
-
           attribution="&copy; OpenStreetMap contributors"
-
-          url="https\://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          eventHandlers={{
+            tileerror: () => setTileUnavailable(true),
+            tileload: () => setTileUnavailable(false),
+          }}
         />
-
-
 
         {data.map((point) => {
 
           const sessions = Number(point.sessions || 0);
 
           const failed = Number(point.failed_logins || 0);
-
-
 
           return (
 
@@ -2346,7 +2128,11 @@ function AttackerMap({ data, filters }) {
 
       </MapContainer>
 
-
+      {tileUnavailable && (
+        <div className="map-basemap-warning">
+          Map tiles could not load. Check your internet connection or tile-provider access.
+        </div>
+      )}
 
       <div className="map-footer">
 
@@ -2354,23 +2140,17 @@ function AttackerMap({ data, filters }) {
 
           <span className="map-legend-title">RISK LEVEL</span>
 
-
-
           <span className="map-legend-item">
 
             <i className="map-legend-dot low" /> Low
 
           </span>
 
-
-
           <span className="map-legend-item">
 
             <i className="map-legend-dot medium" /> Medium
 
           </span>
-
-
 
           <span className="map-legend-item">
 
@@ -2380,8 +2160,6 @@ function AttackerMap({ data, filters }) {
 
         </div>
 
-
-
         <span className="map-count">
 
           {data.length} attacker IPs mapped
@@ -2389,8 +2167,6 @@ function AttackerMap({ data, filters }) {
         </span>
 
       </div>
-
-
 
       <div className="map-disclaimer">
 
@@ -2401,8 +2177,6 @@ function AttackerMap({ data, filters }) {
         location of an attacker.
 
       </div>
-
-
 
       {selectedIp && (
 
@@ -2438,15 +2212,11 @@ function AttackerMap({ data, filters }) {
 
                   </div>
 
-
-
                   <div className="attacker-profile-ip">
 
                     {profile.src_ip}
 
                   </div>
-
-
 
                   <div className="attacker-profile-location">
 
@@ -2461,8 +2231,6 @@ function AttackerMap({ data, filters }) {
                   </div>
 
                 </div>
-
-
 
                 <div className="attacker-profile-risk-wrap">
 
@@ -2480,8 +2248,6 @@ function AttackerMap({ data, filters }) {
 
                   </span>
 
-
-
                   <button
 
                     className="attacker-profile-close"
@@ -2498,8 +2264,6 @@ function AttackerMap({ data, filters }) {
 
               </div>
 
-
-
               <div className="attacker-profile-stats">
 
                 <div className="attacker-profile-stat">
@@ -2514,8 +2278,6 @@ function AttackerMap({ data, filters }) {
 
                 </div>
 
-
-
                 <div className="attacker-profile-stat">
 
                   <span>SESSIONS</span>
@@ -2527,8 +2289,6 @@ function AttackerMap({ data, filters }) {
                   </strong>
 
                 </div>
-
-
 
                 <div className="attacker-profile-stat">
 
@@ -2546,8 +2306,6 @@ function AttackerMap({ data, filters }) {
 
                 </div>
 
-
-
                 <div className="attacker-profile-stat">
 
                   <span>SUCCESSFUL</span>
@@ -2564,8 +2322,6 @@ function AttackerMap({ data, filters }) {
 
                 </div>
 
-
-
                 <div className="attacker-profile-stat">
 
                   <span>COMMANDS</span>
@@ -2580,8 +2336,6 @@ function AttackerMap({ data, filters }) {
 
               </div>
 
-
-
               <div className="attacker-profile-meta">
 
                 <div>
@@ -2592,8 +2346,6 @@ function AttackerMap({ data, filters }) {
 
                 </div>
 
-
-
                 <div>
 
                   <span>LAST SEEN</span>
@@ -2601,8 +2353,6 @@ function AttackerMap({ data, filters }) {
                   <strong>{profile.last_seen || "—"}</strong>
 
                 </div>
-
-
 
                 <div>
 
@@ -2618,8 +2368,6 @@ function AttackerMap({ data, filters }) {
 
               </div>
 
-
-
               <div className="attacker-dna-panel">
 
                 <div className="attacker-dna-header">
@@ -2632,8 +2380,6 @@ function AttackerMap({ data, filters }) {
 
                     </div>
 
-
-
                     <div className="attacker-dna-title">
 
                       Behavioral Fingerprint
@@ -2641,8 +2387,6 @@ function AttackerMap({ data, filters }) {
                     </div>
 
                   </div>
-
-
 
                   {dna?.fingerprint && (
 
@@ -2655,8 +2399,6 @@ function AttackerMap({ data, filters }) {
                   )}
 
                 </div>
-
-
 
                 {dnaLoading ? (
 
@@ -2679,12 +2421,19 @@ function AttackerMap({ data, filters }) {
                   <>
 
                     <div
+
                       className="attacker-dna-grid"
+
                       style={{
+
                         display: "grid",
+
                         gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+
                         gap: "8px",
+
                       }}
+
                     >
 
                       <DnaMetric
@@ -2699,8 +2448,6 @@ function AttackerMap({ data, filters }) {
 
                       />
 
-
-
                       <DnaMetric
 
                         label="COMMAND RATE"
@@ -2712,8 +2459,6 @@ function AttackerMap({ data, filters }) {
                         ).toFixed(1)}%`}
 
                       />
-
-
 
                       <DnaMetric
 
@@ -2727,8 +2472,6 @@ function AttackerMap({ data, filters }) {
 
                       />
 
-
-
                       <DnaMetric
 
                         label="PERSISTENCE"
@@ -2740,8 +2483,6 @@ function AttackerMap({ data, filters }) {
                         ).toFixed(1)}%`}
 
                       />
-
-
 
                       <DnaMetric
 
@@ -2771,7 +2512,87 @@ function AttackerMap({ data, filters }) {
 
               </div>
 
+              <div className="attacker-similarity-panel">
 
+                <div className="attacker-profile-kicker">Similar Attackers</div>
+
+                {similarLoading ? (
+
+                  <div className="attacker-profile-loading">
+
+                    Comparing behavior for the current filters…
+
+                  </div>
+
+                ) : similarError ? (
+
+                  <div className="attacker-profile-error">{similarError}</div>
+
+                ) : similarAttackers.length ? (
+
+                  similarAttackers.map((match) => (
+
+                    <button
+
+                      className="attacker-similarity-row"
+
+                      key={match.src_ip}
+
+                      type="button"
+
+                      onClick={() => {
+
+                        preserveUnmappedSelection.current = !data.some(
+
+                          (point) => point.src_ip === match.src_ip
+
+                        );
+
+                        setSelectedIp(match.src_ip);
+
+                      }}
+
+                    >
+
+                      <span className="attacker-similarity-main">
+
+                        <strong>{match.src_ip}</strong>
+
+                        <small>{(match.reasons || []).join(" · ")}</small>
+
+                      </span>
+
+                      <span className="attacker-similarity-score">
+
+                        {match.similarity_pct}%
+
+                      </span>
+
+                      <span className={`attacker-profile-risk ${String(
+
+                        match.risk_level || ""
+
+                      ).toLowerCase()}`}>
+
+                        {match.risk_level || "Unknown"}
+
+                      </span>
+
+                    </button>
+
+                  ))
+
+                ) : (
+
+                  <div className="attacker-profile-empty">
+
+                    No other attackers match the current filters.
+
+                  </div>
+
+                )}
+
+              </div>
 
               <div className="attacker-profile-columns">
 
@@ -2782,8 +2603,6 @@ function AttackerMap({ data, filters }) {
                     TARGETED USERNAMES
 
                   </div>
-
-
 
                   {profile.usernames?.length ? (
 
@@ -2817,8 +2636,6 @@ function AttackerMap({ data, filters }) {
 
                 </div>
 
-
-
                 <div className="attacker-profile-list">
 
                   <div className="attacker-profile-list-title">
@@ -2826,8 +2643,6 @@ function AttackerMap({ data, filters }) {
                     TARGETED PASSWORDS
 
                   </div>
-
-
 
                   {profile.passwords?.length ? (
 
@@ -2861,8 +2676,6 @@ function AttackerMap({ data, filters }) {
 
                 </div>
 
-
-
                 <div className="attacker-profile-list">
 
                   <div className="attacker-profile-list-title">
@@ -2870,8 +2683,6 @@ function AttackerMap({ data, filters }) {
                     OBSERVED COMMANDS
 
                   </div>
-
-
 
                   {profile.commands_top?.length ? (
 
@@ -2890,8 +2701,6 @@ function AttackerMap({ data, filters }) {
                           {item.value}
 
                         </span>
-
-
 
                         <strong>{item.count}</strong>
 
@@ -2927,44 +2736,78 @@ function AttackerMap({ data, filters }) {
 
 }
 
-
-
 function DnaMetric({ label, value }) {
+
   return (
+
     <div
+
       className="attacker-dna-metric"
+
       style={{
+
         minWidth: 0,
+
         padding: "10px",
+
         border: "1px solid #17263a",
+
         borderRadius: "7px",
+
         background: "#0a121e",
+
       }}
+
     >
+
       <span
+
         style={{
+
           display: "block",
+
           color: "#52647c",
+
           fontSize: "8px",
+
           fontWeight: 800,
+
           letterSpacing: "0.08em",
+
         }}
+
       >
+
         {label}
+
       </span>
+
       <strong
+
         style={{
+
           display: "block",
+
           marginTop: "5px",
+
           color: "#e2e8f0",
+
           fontSize: "14px",
+
           fontWeight: 700,
+
         }}
+
       >
+
         {value}
+
       </strong>
+
     </div>
+
   );
+
 }
 
 function Panel({
@@ -2993,8 +2836,6 @@ function Panel({
 
       </div>
 
-
-
       {children}
 
     </section>
@@ -3003,15 +2844,11 @@ function Panel({
 
 }
 
-
-
 /* =========================================================
 
    CREDENTIAL PANEL
 
    ========================================================= */
-
-
 
 function CredentialPanel({
 
@@ -3053,8 +2890,6 @@ function CredentialPanel({
 
             </thead>
 
-
-
             <tbody>
 
               {data.slice(0, 10).map((item, index) => (
@@ -3066,8 +2901,6 @@ function CredentialPanel({
                     {item.value}
 
                   </td>
-
-
 
                   <td>{item.count.toLocaleString()}</td>
 
@@ -3097,15 +2930,11 @@ function CredentialPanel({
 
 }
 
-
-
 /* =========================================================
 
    ATTACKERS TABLE
 
    ========================================================= */
-
-
 
 function AttackersTable({ attackers }) {
 
@@ -3118,8 +2947,6 @@ function AttackersTable({ attackers }) {
     );
 
   }
-
-
 
   return (
 
@@ -3143,8 +2970,6 @@ function AttackersTable({ attackers }) {
 
         </thead>
 
-
-
         <tbody>
 
           {attackers.slice(0, 7).map((attacker) => (
@@ -3157,23 +2982,17 @@ function AttackersTable({ attackers }) {
 
               </td>
 
-
-
               <td>
 
                 {attacker.sessions.toLocaleString()}
 
               </td>
 
-
-
               <td>
 
                 {attacker.failed_logins.toLocaleString()}
 
               </td>
-
-
 
               <td className="success-cell">
 
@@ -3195,15 +3014,11 @@ function AttackersTable({ attackers }) {
 
 }
 
-
-
 /* =========================================================
 
    EMPTY STATE
 
    ========================================================= */
-
-
 
 function EmptyState({ text }) {
 
@@ -3218,7 +3033,5 @@ function EmptyState({ text }) {
   );
 
 }
-
-
 
 export default App;

@@ -2348,6 +2348,114 @@ tbody tr:last-child td {
 
 }
 
+.attacker-similarity-panel {
+
+  margin-top: 14px;
+
+  padding: 12px;
+
+  border: 1px solid #17263a;
+
+  border-radius: 8px;
+
+  background: #0a121e;
+
+}
+
+.attacker-similarity-panel .attacker-profile-kicker {
+
+  text-transform: uppercase;
+
+}
+
+.attacker-similarity-row {
+
+  display: grid;
+
+  grid-template-columns: minmax(0, 1fr) auto auto;
+
+  align-items: center;
+
+  gap: 12px;
+
+  width: 100%;
+
+  padding: 9px 4px;
+
+  border: 0;
+
+  border-top: 1px solid #142235;
+
+  background: transparent;
+
+  color: #a9b8ca;
+
+  text-align: left;
+
+  cursor: pointer;
+
+}
+
+.attacker-similarity-row:hover {
+
+  background: #101d2e;
+
+}
+
+.attacker-similarity-main {
+
+  display: grid;
+
+  gap: 4px;
+
+  min-width: 0;
+
+}
+
+.attacker-similarity-main strong,
+
+.attacker-similarity-score {
+
+  color: #e2e8f0;
+
+  font-family: "JetBrains Mono", "Consolas", monospace;
+
+  font-size: 11px;
+
+}
+
+.attacker-similarity-main small {
+
+  overflow: hidden;
+
+  color: #71839a;
+
+  font-size: 9px;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+
+}
+
+@media (max-width: 640px) {
+
+  .attacker-similarity-row {
+
+    grid-template-columns: minmax(0, 1fr) auto;
+
+  }
+
+  .attacker-similarity-row .attacker-profile-risk {
+
+    grid-column: 2;
+
+    justify-self: end;
+
+  }
+
+}
+
 .attacker-profile-columns {
 
   display: grid;
@@ -2910,4 +3018,24 @@ button {
 
   }
 
+}
+
+
+/* Basemap fallback warning */
+.map-basemap-warning {
+  position: absolute;
+  z-index: 1000;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  padding: 8px 12px;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  border-radius: 7px;
+  background: rgba(69, 10, 10, 0.94);
+  color: #fecaca;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+  pointer-events: none;
 }
