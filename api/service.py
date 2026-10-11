@@ -942,6 +942,59 @@ def threat_hunt_csv(f: Filters, db_path=None, **criteria) -> str:
     return output.getvalue()
 
 
+def _filtered_threat_alerts(f: Filters, db_path=None) -> list[dict]:
+    clauses, params = _filters(f, "e.timestamp")
+    where = ["e.timestamp IS NOT NULL", *clauses]
+    events = database.query(
+        f"""
+        SELECT e.id, e.timestamp, e.src_ip, e.session, e.eventid,
+               e.username, e.command
+        FROM events e
+        LEFT JOIN session_clusters c ON e.session = c.session
+        WHERE {" AND ".join(where)}
+        ORDER BY e.timestamp, e.id
+        """,
+        tuple(params),
+        db_path,
+    )
+    return analysis.generate_threat_alerts(events)
+
+
+def threat_alerts(
+    f: Filters,
+    db_path=None,
+    *,
+    severity: str | None = None,
+    rule_id: str | None = None,
+    source_ip: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict:
+    alerts = _filtered_threat_alerts(f, db_path)
+    if severity:
+        alerts = [alert for alert in alerts if alert["severity"] == severity]
+    if rule_id:
+        alerts = [alert for alert in alerts if alert["rule_id"] == rule_id]
+    if source_ip:
+        alerts = [alert for alert in alerts if alert["source_ip"] == source_ip.strip()]
+    return {
+        "items": alerts[offset:offset + limit],
+        "total": len(alerts),
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + limit < len(alerts),
+        "rule_catalog": analysis.ALERT_RULE_CATALOG,
+    }
+
+
+def threat_alert_detail(alert_id: str, f: Filters, db_path=None) -> dict | None:
+    return next(
+        (alert for alert in _filtered_threat_alerts(f, db_path)
+         if alert["alert_id"] == alert_id),
+        None,
+    )
+
+
 def similar_attackers(src_ip: str, f: Filters, db_path=None, limit: int = 5) -> list[dict] | None:
     """Rank other attackers using normalized Attacker DNA metrics."""
     df = load_sessions(f, db_path)

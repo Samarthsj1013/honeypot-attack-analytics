@@ -2408,6 +2408,176 @@ tbody tr:last-child td {
   padding: 14px;
 }
 
+.threat-alerts-panel {
+  padding: 14px;
+}
+
+.threat-alerts-panel .threat-hunt-heading {
+  justify-content: flex-start;
+}
+
+.threat-alerts-panel .threat-hunt-heading p {
+  max-width: 720px;
+  line-height: 1.5;
+}
+
+.threat-alert-filters {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(220px, 1.4fr) minmax(160px, 1fr) auto;
+  align-items: end;
+  gap: 9px;
+  margin: 12px 0;
+}
+
+.threat-alert-rule-catalog {
+  margin-top: 8px;
+  color: #8ea2bb;
+  font-size: 9px;
+}
+
+.threat-alert-rule-catalog summary {
+  width: fit-content;
+  color: #38bdf8;
+  cursor: pointer;
+}
+
+.threat-alert-rule-catalog ul {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.threat-alert-rule-catalog strong {
+  color: #cbd5e1;
+}
+
+.threat-alert-rule-catalog span {
+  color: #fbbf24;
+}
+
+.threat-alert-filters label {
+  display: grid;
+  gap: 5px;
+  color: #71839d;
+  font-size: 9px;
+}
+
+.threat-alert-filters input,
+.threat-alert-filters select {
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid #26364b;
+  border-radius: 6px;
+  background: #0b1625;
+  color: #dbe4ef;
+  font-size: 10px;
+}
+
+.threat-alert-list {
+  display: grid;
+  gap: 7px;
+}
+
+.threat-alert-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid #17263a;
+  border-radius: 7px;
+  background: #0a121e;
+}
+
+.threat-alert-card-main,
+.threat-alert-detail-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  min-width: 0;
+}
+
+.threat-alert-card-main > strong,
+.threat-alert-detail-heading > strong {
+  color: #dbe4ef;
+  font-size: 11px;
+}
+
+.threat-alert-card-main > span,
+.threat-alert-detail-heading > span,
+.threat-alert-detail-meta {
+  color: #71839d;
+  font-size: 9px;
+}
+
+.threat-alert-detail-button {
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  border: 1px solid #26364b;
+  border-radius: 5px;
+  background: #0c1726;
+  color: #a9b8ca;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.threat-alert-detail {
+  display: grid;
+  gap: 9px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #20334b;
+  border-radius: 7px;
+  background: #0b1625;
+}
+
+.threat-alert-detail p {
+  margin: 0;
+  color: #a9b8ca;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.threat-alert-detail-meta {
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.threat-alert-evidence {
+  display: grid;
+  gap: 8px;
+}
+
+.threat-alert-evidence > div {
+  display: grid;
+  gap: 4px;
+  padding-top: 7px;
+  border-top: 1px solid #17263a;
+}
+
+.threat-alert-evidence strong {
+  color: #64748b;
+  font-size: 8px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.threat-alert-evidence code {
+  overflow-wrap: anywhere;
+  color: #cbd5e1;
+  font-size: 10px;
+  white-space: pre-wrap;
+}
+
+.threat-alert-detail .threat-alert-note {
+  color: #fbbf24;
+  font-size: 9px;
+}
+
 .threat-hunt-heading,
 .threat-hunt-results-heading,
 .threat-hunt-pagination,
@@ -2753,6 +2923,15 @@ tbody tr:last-child td {
 
   .threat-hunt-filters {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .threat-alert-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .threat-alert-card {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

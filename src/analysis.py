@@ -592,6 +592,202 @@ def reconstruct_incident_timeline(events: pd.DataFrame, event_type: str | None =
     }
 
 
+ALERT_COMMAND_RULES = (
+    ("shell_or_network_execution", "Shell or Network Execution",
+     re.compile(r"(?:/dev/tcp|\bnc\b.*\s-[ec]\b|\bbash\s+-i\b|\bsh\s+-i\b)", re.I), "High"),
+    ("destructive_file_operation", "Destructive File Operation",
+     re.compile(r"\brm\s+-[a-z]*r[a-z]*f\b|\bmkfs(?:\.|\s)|\bdd\s+if=", re.I), "High"),
+    ("encoded_or_persistent_execution", "Encoded or Persistent Execution",
+     re.compile(r"\bbase64\s+(?:-d|--decode)\b|\bchmod\s+\+x\b|\bnohup\b|\bcrontab\b", re.I), "Medium"),
+)
+
+ALERT_DOWNLOAD_TOOL_PATTERN = re.compile(
+    r"\b(wget|curl|ftp|tftp|certutil(?:\.exe)?|bitsadmin(?:\.exe)?|"
+    r"invoke-webrequest|iwr)\b", re.I
+)
+
+ALERT_RULE_CATALOG = [
+    {
+        "rule_id": "repeated_failed_logins",
+        "rule_name": "Repeated Failed Login Attempts",
+        "criteria": "At least 5 failed-login events for the same source IP within one session.",
+        "severity": "Medium at 5–9 events; High at 10 or more.",
+    },
+    {
+        "rule_id": "successful_honeypot_login",
+        "rule_name": "Successful Honeypot Login",
+        "criteria": "One or more cowrie.login.success events in the same source-IP session.",
+        "severity": "High.",
+    },
+    {
+        "rule_id": "suspicious_command_pattern",
+        "rule_name": "Suspicious Command Pattern",
+        "criteria": "Observed command matches a listed shell/network, destructive, encoded, or persistence pattern.",
+        "severity": "High for shell/network execution or destructive operations; Medium for encoded/persistent execution.",
+    },
+    {
+        "rule_id": "download_tool_activity",
+        "rule_name": "Download Tool Activity",
+        "criteria": "Observed command contains wget, curl, ftp, tftp, certutil, bitsadmin, Invoke-WebRequest, or iwr.",
+        "severity": "Medium.",
+    },
+]
+
+
+def generate_threat_alerts(events: pd.DataFrame) -> list[dict]:
+    """Aggregate deterministic alert findings by source IP, session, and rule.
+
+    Five or more failed logins in one session create one alert (Medium for 5–9,
+    High for 10+). Any successful honeypot login is High. Download-tool and
+    suspicious-command matches are Medium unless the matched command pattern
+    is explicitly categorized High above. These severities are triage levels,
+    not proof of intent or real-system compromise.
+    """
+    if events is None or events.empty or "src_ip" not in events or "eventid" not in events:
+        return []
+
+    data = events.copy()
+    for field in ("session", "timestamp", "username", "command"):
+        if field not in data:
+            data[field] = None
+    if "id" not in data:
+        data["id"] = range(len(data))
+    data["_time"] = pd.to_datetime(data["timestamp"], errors="coerce", utc=True)
+    data = data.dropna(subset=["src_ip"])
+    if data.empty:
+        return []
+
+    grouped = {}
+    for _, row in data.iterrows():
+        source_ip = str(row["src_ip"]).strip()
+        if not source_ip:
+            continue
+        session = str(row["session"]) if pd.notna(row["session"]) and str(row["session"]).strip() else None
+        grouped.setdefault((source_ip, session), []).append(row)
+
+    alerts = []
+    for (source_ip, session), group in sorted(
+        grouped.items(), key=lambda item: (item[0][0], item[0][1] or "")
+    ):
+        group.sort(key=lambda row: (
+            row["_time"] if pd.notna(row["_time"]) else pd.Timestamp.max.tz_localize("UTC"),
+            str(row.get("id", "")),
+        ))
+
+        def add_alert(rule_id, rule_name, severity, rationale, evidence_rows, evidence):
+            if not evidence_rows:
+                return
+            times = [row["_time"] for row in evidence_rows if pd.notna(row["_time"])]
+            event_counts = {}
+            for event in evidence_rows:
+                event_id = str(event.get("eventid") or "unknown")
+                event_counts[event_id] = event_counts.get(event_id, 0) + 1
+            session_ids = [session] if session else []
+            stable_key = f"{rule_id}|{source_ip}|{session or 'unknown-session'}"
+            alerts.append({
+                "alert_id": "alert_" + sha256(stable_key.encode("utf-8")).hexdigest()[:16],
+                "source_ip": source_ip,
+                "session_ids": session_ids,
+                "rule_id": rule_id,
+                "rule_name": rule_name,
+                "severity": severity,
+                "first_seen": min(times).isoformat() if times else None,
+                "last_seen": max(times).isoformat() if times else None,
+                "event_count": len(evidence_rows),
+                "supporting_event_counts": event_counts,
+                "evidence": evidence,
+                "severity_rationale": rationale,
+                "assessment_note": (
+                    "Severity is an inferred triage priority from recorded honeypot activity. "
+                    "It does not establish attacker intent, attribution, or compromise of a real system."
+                ),
+            })
+
+        failed = [row for row in group if row.get("eventid") == "cowrie.login.failed"]
+        if len(failed) >= 5:
+            severity = "High" if len(failed) >= 10 else "Medium"
+            threshold = "10 or more" if severity == "High" else "5–9"
+            usernames = sorted({
+                str(row["username"]) for row in failed
+                if pd.notna(row.get("username")) and str(row["username"]).strip()
+            })
+            add_alert(
+                "repeated_failed_logins", "Repeated Failed Login Attempts", severity,
+                f"{threshold} failed login events in one session.",
+                failed,
+                {"failed_login_count": len(failed), "usernames_observed": usernames},
+            )
+
+        successful = [row for row in group if row.get("eventid") == "cowrie.login.success"]
+        if successful:
+            usernames = sorted({
+                str(row["username"]) for row in successful
+                if pd.notna(row.get("username")) and str(row["username"]).strip()
+            })
+            add_alert(
+                "successful_honeypot_login", "Successful Honeypot Login", "High",
+                "At least one successful login event was recorded by the honeypot.",
+                successful,
+                {"successful_honeypot_login_count": len(successful), "usernames_observed": usernames},
+            )
+
+        commands = [
+            row for row in group
+            if row.get("eventid") == "cowrie.command.input"
+            and pd.notna(row.get("command")) and str(row.get("command")).strip()
+        ]
+        download_rows, download_tools, download_commands = [], set(), set()
+        suspicious_rows, suspicious_commands, suspicious_matches = {}, set(), {}
+        suspicious_severity = "Medium"
+        for row in commands:
+            command_text = str(row["command"]).strip()
+            found_tools = {match.lower() for match in ALERT_DOWNLOAD_TOOL_PATTERN.findall(command_text)}
+            if found_tools:
+                download_rows.append(row)
+                download_tools.update(found_tools)
+                download_commands.add(command_text)
+            for rule_id, label, pattern, severity in ALERT_COMMAND_RULES:
+                if pattern.search(command_text):
+                    row_id = row.get("id")
+                    suspicious_rows[row_id if pd.notna(row_id) else row.name] = row
+                    suspicious_commands.add(command_text)
+                    suspicious_matches.setdefault(label, set()).add(command_text)
+                    if severity == "High":
+                        suspicious_severity = "High"
+
+        if suspicious_rows:
+            add_alert(
+                "suspicious_command_pattern", "Suspicious Command Pattern", suspicious_severity,
+                "Observed command text matched one or more documented command patterns; "
+                "High applies when a matched pattern is categorized High.",
+                list(suspicious_rows.values()),
+                {
+                    "commands_observed": sorted(suspicious_commands),
+                    "matched_patterns": [
+                        {"pattern": label, "commands": sorted(values)}
+                        for label, values in sorted(suspicious_matches.items())
+                    ],
+                },
+            )
+        if download_rows:
+            add_alert(
+                "download_tool_activity", "Download Tool Activity", "Medium",
+                "Observed command text contains a recognized download-capable tool name.",
+                download_rows,
+                {"download_tools_observed": sorted(download_tools),
+                 "commands_observed": sorted(download_commands)},
+            )
+
+    severity_order = {"High": 0, "Medium": 1, "Low": 2}
+    return sorted(
+        alerts,
+        key=lambda alert: (
+            alert["first_seen"] or "", severity_order.get(alert["severity"], 3),
+            alert["source_ip"], alert["rule_id"], alert["alert_id"],
+        ),
+    )
+
+
 def top_credential_pairs(n: int = 10, db_path=None) -> pd.DataFrame:
     """Most common username:password combinations tried."""
     return database.query("""

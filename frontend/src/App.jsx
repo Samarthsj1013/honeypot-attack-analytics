@@ -1966,6 +1966,201 @@ function ThreatHunt({ filters, onSelectAttacker }) {
   );
 }
 
+function ThreatAlerts({ filters, onSelectAttacker }) {
+  const [draft, setDraft] = useState({ severity: "", rule_id: "", source_ip: "" });
+  const [criteria, setCriteria] = useState({});
+  const [page, setPage] = useState(0);
+  const [results, setResults] = useState({ items: [], total: 0, limit: 25, rule_catalog: [] });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [selectedAlertId, setSelectedAlertId] = useState(null);
+  const [selectedAlert, setSelectedAlert] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    async function loadAlerts() {
+      try {
+        setLoading(true);
+        setError("");
+        const params = { limit: 25, offset: page * 25 };
+        if (filters.start) params.start = filters.start;
+        if (filters.end) params.end = filters.end;
+        if (filters.behavior) params.behavior = filters.behavior;
+        Object.entries(criteria).forEach(([key, value]) => { if (value) params[key] = value; });
+        const response = await axios.get(`${API}/api/alerts`, { params });
+        if (!Array.isArray(response.data?.items)) throw new Error("Unexpected alert response");
+        if (active) setResults(response.data);
+      } catch (err) {
+        console.error("Failed to load threat alerts:", err);
+        if (active) {
+          setResults({ items: [], total: 0, limit: 25, rule_catalog: [] });
+          setError(err.response?.data?.detail || "Unable to load threat alerts.");
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    loadAlerts();
+    return () => { active = false; };
+  }, [filters, criteria, page]);
+
+  useEffect(() => {
+    if (!selectedAlertId) {
+      setSelectedAlert(null);
+      return undefined;
+    }
+    let active = true;
+    async function loadDetail() {
+      try {
+        setDetailLoading(true);
+        setDetailError("");
+        const params = {};
+        if (filters.start) params.start = filters.start;
+        if (filters.end) params.end = filters.end;
+        if (filters.behavior) params.behavior = filters.behavior;
+        const response = await axios.get(
+          `${API}/api/alerts/${encodeURIComponent(selectedAlertId)}`, { params }
+        );
+        if (active) setSelectedAlert(response.data);
+      } catch (err) {
+        console.error("Failed to load alert details:", err);
+        if (active) {
+          setSelectedAlert(null);
+          setDetailError("This alert is unavailable for the current date and behavior filters.");
+        }
+      } finally {
+        if (active) setDetailLoading(false);
+      }
+    }
+    loadDetail();
+    return () => { active = false; };
+  }, [selectedAlertId, filters]);
+
+  const applyFilters = (event) => {
+    event.preventDefault();
+    setCriteria(Object.fromEntries(
+      Object.entries(draft).map(([key, value]) => [key, value.trim()])
+        .filter(([, value]) => value)
+    ));
+    setPage(0);
+  };
+
+  const updateDraft = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
+
+  return (
+    <section className="attacker-profile-panel threat-alerts-panel">
+      <div className="threat-hunt-heading">
+        <div>
+          <div className="attacker-profile-kicker">AUTOMATED THREAT ALERTS</div>
+          <p>Aggregated recorded events, grouped by source IP, session, and rule. Severity is triage priority, not attribution.</p>
+        </div>
+      </div>
+      <div className="threat-hunt-scope">
+        <span>Date: {filters.start || "All dates"} – {filters.end || "Latest"}</span>
+        <span>Behavior: {filters.behavior || "All behaviors"}</span>
+        <span>Severity rules: 5–9 failed logins = Medium; 10+ = High; successful honeypot login = High; download-tool activity = Medium.</span>
+      </div>
+      <details className="threat-alert-rule-catalog">
+        <summary>Detection and severity criteria</summary>
+        <ul>
+          {results.rule_catalog.map((rule) => (
+            <li key={rule.rule_id}>
+              <strong>{rule.rule_name}:</strong> {rule.criteria} <span>{rule.severity}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
+      <form className="threat-alert-filters" onSubmit={applyFilters}>
+        <label>Severity
+          <select value={draft.severity} onChange={(event) => updateDraft("severity", event.target.value)}>
+            <option value="">All severities</option><option value="High">High</option><option value="Medium">Medium</option>
+          </select>
+        </label>
+        <label>Rule
+          <select value={draft.rule_id} onChange={(event) => updateDraft("rule_id", event.target.value)}>
+            <option value="">All rules</option>
+            {results.rule_catalog.map((rule) => <option value={rule.rule_id} key={rule.rule_id}>{rule.rule_name}</option>)}
+          </select>
+        </label>
+        <label>Source IP<input value={draft.source_ip} onChange={(event) => updateDraft("source_ip", event.target.value)} placeholder="Exact IP" /></label>
+        <button type="submit" className="filter-button">Filter alerts</button>
+      </form>
+      <div className="threat-hunt-results-heading">
+        <span>{loading ? "Loading alerts…" : `${results.total.toLocaleString()} alerts`}</span>
+      </div>
+      {error && <div className="attacker-profile-error">{error}</div>}
+      {!loading && !error && !results.items.length && (
+        <div className="attacker-profile-empty">No alerts match the current date, behavior, and alert filters.</div>
+      )}
+      <div className="threat-alert-list">
+        {results.items.map((alert) => (
+          <article className="threat-alert-card" key={alert.alert_id}>
+            <div className="threat-alert-card-main">
+              <RiskBadge level={alert.severity} />
+              <strong>{alert.rule_name}</strong>
+              <button type="button" className="threat-hunt-ip" onClick={() => onSelectAttacker(alert.source_ip)}>
+                {alert.source_ip}
+              </button>
+              <span>{alert.first_seen || "Timestamp unavailable"}</span>
+              <span>{alert.event_count} supporting event(s)</span>
+            </div>
+            <button
+              type="button"
+              className="threat-alert-detail-button"
+              onClick={() => setSelectedAlertId(
+                selectedAlertId === alert.alert_id ? null : alert.alert_id
+              )}
+            >
+              {selectedAlertId === alert.alert_id ? "Close details" : "Inspect alert"}
+            </button>
+          </article>
+        ))}
+      </div>
+      {results.items.length > 0 && (
+        <div className="threat-hunt-pagination">
+          <button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0 || loading}>Previous</button>
+          <span>Page {page + 1} of {Math.max(1, Math.ceil(results.total / results.limit))}</span>
+          <button type="button" onClick={() => setPage((current) => current + 1)} disabled={!results.has_more || loading}>Next</button>
+        </div>
+      )}
+      {selectedAlertId && (detailLoading ? (
+        <div className="attacker-profile-loading">Loading alert evidence…</div>
+      ) : detailError ? (
+        <div className="attacker-profile-error">{detailError}</div>
+      ) : selectedAlert ? (
+        <div className="threat-alert-detail">
+          <div className="threat-alert-detail-heading">
+            <RiskBadge level={selectedAlert.severity} />
+            <strong>{selectedAlert.rule_name}</strong>
+            <span>{selectedAlert.first_seen} – {selectedAlert.last_seen}</span>
+          </div>
+          <button type="button" className="threat-hunt-ip" onClick={() => onSelectAttacker(selectedAlert.source_ip)}>
+            Open attacker profile: {selectedAlert.source_ip}
+          </button>
+          <p>{selectedAlert.severity_rationale}</p>
+          <div className="threat-alert-detail-meta">
+            <span>Sessions: {selectedAlert.session_ids.join(", ") || "Unavailable"}</span>
+            <span>Supporting event counts: {Object.entries(selectedAlert.supporting_event_counts).map(([type, count]) => `${type}: ${count}`).join(" · ")}</span>
+          </div>
+          <div className="threat-alert-evidence">
+            {Object.entries(selectedAlert.evidence).map(([key, value]) => (
+              <div key={key}>
+                <strong>{key.replaceAll("_", " ")}</strong>
+                {Array.isArray(value) ? value.map((item, index) => (
+                  <code key={index}>{typeof item === "object" ? `${item.pattern}: ${item.commands.join("; ")}` : String(item)}</code>
+                )) : <code>{String(value)}</code>}
+              </div>
+            ))}
+          </div>
+          <p className="threat-alert-note">{selectedAlert.assessment_note}</p>
+        </div>
+      ) : null)}
+    </section>
+  );
+}
+
 function AttackerMap({ data, filters }) {
 
   const [selectedIp, setSelectedIp] = useState(null);
@@ -2482,6 +2677,14 @@ function AttackerMap({ data, filters }) {
         location of an attacker.
 
       </div>}
+
+      <ThreatAlerts
+        filters={filters}
+        onSelectAttacker={(ip) => {
+          preserveUnmappedSelection.current = !data.some((point) => point.src_ip === ip);
+          setSelectedIp(ip);
+        }}
+      />
 
       <ThreatHunt
         filters={filters}

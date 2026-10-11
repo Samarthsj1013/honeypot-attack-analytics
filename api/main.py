@@ -196,6 +196,38 @@ def create_app(db_path=None) -> FastAPI:
             headers={"Content-Disposition": 'attachment; filename="threat-hunt-results.csv"'},
         )
 
+    @router.get("/alerts")
+    def threat_alerts(
+        f: Filters = Depends(get_filters),
+        severity: Literal["High", "Medium"] | None = None,
+        rule_id: Literal[
+            "repeated_failed_logins",
+            "successful_honeypot_login",
+            "suspicious_command_pattern",
+            "download_tool_activity",
+        ] | None = None,
+        source_ip: str | None = Query(default=None, max_length=45),
+        limit: int = Query(50, ge=1, le=100),
+        offset: int = Query(0, ge=0),
+    ) -> dict:
+        return service.threat_alerts(
+            f, db_path, severity=severity, rule_id=rule_id,
+            source_ip=source_ip, limit=limit, offset=offset,
+        )
+
+    @router.get("/alerts/{alert_id}")
+    def threat_alert_detail(
+        alert_id: str,
+        f: Filters = Depends(get_filters),
+    ) -> dict:
+        alert = service.threat_alert_detail(alert_id, f, db_path)
+        if alert is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Alert not found for the current date and behavior filters",
+            )
+        return alert
+
     @router.get("/campaigns")
     def attack_campaigns(
         f: Filters = Depends(get_filters),
