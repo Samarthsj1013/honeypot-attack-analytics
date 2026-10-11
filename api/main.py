@@ -167,6 +167,41 @@ def create_app(db_path=None) -> FastAPI:
             limit=limit, offset=offset, sort_by=sort_by, sort_order=sort_order,
         )
 
+    @router.get("/mitre/techniques")
+    def mitre_techniques(
+        f: Filters = Depends(get_filters),
+        technique_id: str | None = Query(default=None, max_length=16),
+        tactic: Literal[
+            "Credential Access", "Command and Control", "Discovery", "Execution",
+        ] | None = None,
+        source_ip: str | None = Query(default=None, max_length=45),
+        limit: int = Query(25, ge=1, le=100),
+        offset: int = Query(0, ge=0),
+    ) -> dict:
+        return service.technique_intelligence(
+            f, db_path, technique_id=technique_id, tactic=tactic,
+            source_ip=source_ip, limit=limit, offset=offset,
+        )
+
+    @router.get("/mitre/techniques/{technique_id}")
+    def mitre_technique_detail(
+        technique_id: str,
+        f: Filters = Depends(get_filters),
+        source_ip: str | None = Query(default=None, max_length=45),
+        limit: int = Query(100, ge=1, le=200),
+        offset: int = Query(0, ge=0),
+    ) -> dict:
+        detail = service.technique_detail(
+            technique_id, f, db_path, source_ip=source_ip,
+            limit=limit, offset=offset,
+        )
+        if detail is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Technique evidence not found for the current filters",
+            )
+        return detail
+
     @router.get("/threat-hunt")
     def threat_hunt(
         f: Filters = Depends(get_filters),

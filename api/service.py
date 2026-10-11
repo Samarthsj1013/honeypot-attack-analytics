@@ -15,6 +15,7 @@ import pandas as pd
 import config
 
 from src import analysis, database
+from src import mitre
 
 REQUIRED_TABLES = {"events", "sessions", "ip_intel", "session_clusters"}
 
@@ -551,6 +552,98 @@ def source_intelligence(
         "offset": offset,
         "has_more": offset + len(paged) < source_total,
     }
+
+
+def technique_intelligence(
+    f: Filters,
+    db_path=None,
+    *,
+    technique_id: str | None = None,
+    tactic: str | None = None,
+    source_ip: str | None = None,
+    limit: int = 25,
+    offset: int = 0,
+) -> dict:
+    """Return filtered technique aggregates built only from stored events."""
+    events = _technique_event_rows(f, db_path, source_ip)
+    items = mitre.map_events(events)
+    if technique_id and technique_id.strip():
+        selected_id = technique_id.strip().upper()
+        items = [item for item in items if item["technique_id"] == selected_id]
+    if tactic:
+        items = [item for item in items if item["tactic"] == tactic]
+    summary = {
+        "mapped_techniques": len(items),
+        "observed_tactics": len({item["tactic"] for item in items}),
+        "source_ips": len({source["src_ip"] for item in items for source in item["sources"]}),
+        "matching_techniques": len(items),
+    }
+    total = len(items)
+    page = items[offset:offset + limit]
+    # Avoid shipping every source's full evidence with the ranked list. Details
+    # are available through /api/mitre/techniques/{technique_id}.
+    listing = [{key: value for key, value in item.items() if key != "sources"} for item in page]
+    return {
+        "summary": summary,
+        "scope_note": mitre.SCOPE_NOTE,
+        "items": listing,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(page) < total,
+    }
+
+
+def technique_detail(
+    technique_id: str,
+    f: Filters,
+    db_path=None,
+    *,
+    source_ip: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict | None:
+    """Return per-source evidence for one technique under active filters."""
+    detail_items = mitre.map_events(_technique_event_rows(f, db_path, source_ip))
+    selected = next(
+        (item for item in detail_items if item["technique_id"] == technique_id.strip().upper()),
+        None,
+    )
+    if selected is None:
+        return None
+    sources = selected["sources"]
+    page = sources[offset:offset + limit]
+    return {
+        **{key: value for key, value in selected.items() if key != "sources"},
+        "scope_note": mitre.SCOPE_NOTE,
+        "sources": page,
+        "total_sources": len(sources),
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(page) < len(sources),
+    }
+
+
+def _technique_event_rows(f: Filters, db_path=None, source_ip: str | None = None):
+    clauses, params = ["e.eventid IN ('cowrie.login.failed', 'cowrie.command.input')"], []
+    date_behavior_clauses, date_behavior_params = _filters(f, "e.timestamp")
+    clauses.extend(date_behavior_clauses)
+    params.extend(date_behavior_params)
+    if source_ip and source_ip.strip():
+        clauses.append("e.src_ip = ?")
+        params.append(source_ip.strip())
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    return database.query(
+        f"""
+        SELECT e.timestamp, e.session, e.src_ip, e.eventid, e.command
+        FROM events e
+        LEFT JOIN session_clusters c ON e.session = c.session
+        {where}
+        ORDER BY e.timestamp, e.id
+        """,
+        tuple(params),
+        db_path,
+    )
 
 def map_points(df: pd.DataFrame) -> list[dict]:
 

