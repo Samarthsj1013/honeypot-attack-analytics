@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import axios from "axios";
+import AttackGraph from "./AttackGraph";
 
 import {
 
@@ -35,6 +36,7 @@ import {
   ShieldAlert,
 
   Users,
+  Network,
 
 } from "lucide-react";
 
@@ -1239,6 +1241,13 @@ function App() {
           />
         </section>
 
+        <section id="attack-graph" className="dashboard-grid">
+          <AttackGraph
+            filters={filters}
+            onSelectAttacker={setProfileSelectionRequest}
+          />
+        </section>
+
         <section className="dashboard-grid">
           <Panel
 
@@ -1333,6 +1342,7 @@ function Sidebar() {
       "threat-intelligence",
 
       "mitre-techniques",
+      "attack-graph",
 
       "credentials",
 
@@ -1457,6 +1467,18 @@ function Sidebar() {
           href="#mitre-techniques"
 
           active={activeSection === "mitre-techniques"}
+
+        />
+
+        <SidebarItem
+
+          icon={<Network />}
+
+          label="Attack Graph"
+
+          href="#attack-graph"
+
+          active={activeSection === "attack-graph"}
 
         />
 

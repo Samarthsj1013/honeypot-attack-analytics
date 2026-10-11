@@ -281,6 +281,17 @@ def create_app(db_path=None) -> FastAPI:
             )
         return alert
 
+    @router.get("/attack-graph")
+    def attack_graph(
+        f: Filters = Depends(get_filters),
+        source_ip: str | None = Query(default=None, max_length=45),
+        session_id: str | None = Query(default=None, max_length=256),
+        limit: int = Query(120, ge=1, le=200),
+    ) -> dict:
+        return service.attack_graph(
+            f, db_path, source_ip=source_ip, session_id=session_id, limit=limit,
+        )
+
     @router.get("/campaigns")
     def attack_campaigns(
         f: Filters = Depends(get_filters),

@@ -7,6 +7,7 @@ Query layer for the API. Every public function returns plain, JSON-safe data
 """
 
 from dataclasses import dataclass
+from hashlib import sha256
 
 from pathlib import Path
 
@@ -1192,6 +1193,217 @@ def threat_alert_detail(alert_id: str, f: Filters, db_path=None) -> dict | None:
          if alert["alert_id"] == alert_id),
         None,
     )
+
+
+def attack_graph(
+    f: Filters,
+    db_path=None,
+    *,
+    source_ip: str | None = None,
+    session_id: str | None = None,
+    limit: int = 120,
+) -> dict:
+    """Build a compact, evidence-backed graph from filtered recorded events.
+
+    The default scope uses the six most active sources and at most 30 recent
+    sessions. A source or session focus narrows the query. Edges mean only:
+    IP-to-session (recorded source), session-to-command (command recorded in
+    session), session-to-alert (alert aggregates that session), IP-to-technique
+    (existing mapper returned evidence for source), and command-to-technique
+    (the existing mapper matched that exact observed command).
+    """
+    node_limit = max(1, min(int(limit), 200))
+    clauses, params = _filters(f, "e.timestamp")
+    clauses.append("e.timestamp IS NOT NULL")
+    if session_id and session_id.strip():
+        clauses.append("e.session = ?")
+        params.append(session_id.strip())
+    if source_ip and source_ip.strip():
+        clauses.append("e.src_ip = ?")
+        params.append(source_ip.strip())
+    where = " AND ".join(clauses)
+
+    # Choose a bounded, stable source set when no focus is selected.
+    if not source_ip and not session_id:
+        source_rows = database.query(
+            f"""SELECT e.src_ip, COUNT(DISTINCT e.session) AS sessions,
+                       MAX(e.timestamp) AS last_seen
+                FROM events e
+                LEFT JOIN session_clusters c ON e.session = c.session
+                WHERE {where} AND e.src_ip IS NOT NULL
+                GROUP BY e.src_ip
+                ORDER BY sessions DESC, last_seen DESC, e.src_ip
+                LIMIT 6""",
+            tuple(params), db_path,
+        )
+        selected_ips = [str(value) for value in source_rows["src_ip"].tolist()]
+        if not selected_ips:
+            return {"nodes": [], "edges": [], "scope": {"source_ip": None, "session_id": None, "limit": node_limit}}
+        marks = ",".join("?" for _ in selected_ips)
+        clauses.append(f"e.src_ip IN ({marks})")
+        params.extend(selected_ips)
+        where = " AND ".join(clauses)
+
+    session_cap = max(1, min(30, node_limit // 4))
+    sessions = database.query(
+        f"""SELECT e.session, e.src_ip, MAX(e.timestamp) AS last_seen,
+                   COUNT(*) AS event_count
+            FROM events e
+            LEFT JOIN session_clusters c ON e.session = c.session
+            WHERE {where} AND e.session IS NOT NULL AND e.session != ''
+            GROUP BY e.session, e.src_ip
+            ORDER BY last_seen DESC, e.session
+            LIMIT ?""",
+        (*params, session_cap), db_path,
+    )
+    session_values = [str(value) for value in sessions["session"].tolist()]
+    if not session_values:
+        return {"nodes": [], "edges": [], "scope": {"source_ip": source_ip, "session_id": session_id, "limit": node_limit}}
+    marks = ",".join("?" for _ in session_values)
+    event_clauses, event_params = _filters(f, "e.timestamp")
+    event_clauses.append(f"e.session IN ({marks})")
+    event_params.extend(session_values)
+    if source_ip and source_ip.strip():
+        event_clauses.append("e.src_ip = ?")
+        event_params.append(source_ip.strip())
+    event_rows = database.query(
+        f"""SELECT e.id, e.timestamp, e.session, e.src_ip, e.eventid, e.command
+            FROM events e
+            LEFT JOIN session_clusters c ON e.session = c.session
+            WHERE {' AND '.join(event_clauses)}
+            ORDER BY e.timestamp, e.id
+            LIMIT 5000""",
+        tuple(event_params), db_path,
+    )
+    rows = records(event_rows)
+    if not rows:
+        return {"nodes": [], "edges": [], "scope": {"source_ip": source_ip, "session_id": session_id, "limit": node_limit}}
+
+    nodes: dict[str, dict] = {}
+    edges: dict[str, dict] = {}
+
+    def add_node(node_id: str, node_type: str, label: str, **metadata) -> bool:
+        if node_id in nodes:
+            return True
+        if len(nodes) >= node_limit:
+            return False
+        nodes[node_id] = {"id": node_id, "type": node_type, "label": label, "metadata": metadata}
+        return True
+
+    def add_edge(source: str, target: str, relationship: str, **metadata) -> None:
+        if source not in nodes or target not in nodes:
+            return
+        edge_id = f"{relationship}|{source}|{target}"
+        edges.setdefault(edge_id, {"id": edge_id, "source": source, "target": target, "relationship": relationship, "metadata": metadata})
+
+    source_ips = sorted({str(row["src_ip"]) for row in rows if row.get("src_ip")})
+    for ip in source_ips:
+        add_node(f"ip:{ip}", "source_ip", ip, source_ip=ip)
+    session_evidence: dict[str, dict] = {}
+    for row in rows:
+        session = str(row.get("session") or "")
+        if not session:
+            continue
+        item = session_evidence.setdefault(session, {
+            "first_seen": None, "last_seen": None, "event_types": set(),
+        })
+        timestamp = row.get("timestamp")
+        if timestamp:
+            item["first_seen"] = min(item["first_seen"], timestamp) if item["first_seen"] else timestamp
+            item["last_seen"] = max(item["last_seen"], timestamp) if item["last_seen"] else timestamp
+        if row.get("eventid"):
+            item["event_types"].add(str(row["eventid"]))
+    session_ip: dict[str, str] = {}
+    for item in records(sessions):
+        session = str(item["session"])
+        ip = str(item["src_ip"]) if item.get("src_ip") else None
+        evidence = session_evidence.get(session, {})
+        if not ip or not add_node(f"session:{session}", "session", session,
+                                  session_id=session, source_ip=ip,
+                                  first_seen=evidence.get("first_seen"),
+                                  last_seen=evidence.get("last_seen") or item.get("last_seen"),
+                                  event_count=int(item.get("event_count") or 0),
+                                  event_types=sorted(evidence.get("event_types", set()))):
+            continue
+        session_ip[session] = ip
+        add_edge(f"ip:{ip}", f"session:{session}", "recorded_session", explanation="The events table records this session under this source IP.")
+
+    command_sessions: dict[str, set[str]] = {}
+    command_evidence: dict[str, dict] = {}
+    for row in rows:
+        session = str(row.get("session") or "")
+        command = row.get("command")
+        if row.get("eventid") != "cowrie.command.input" or not isinstance(command, str) or not command.strip():
+            continue
+        command = command.strip()
+        command_id = "command:" + sha256(command.encode("utf-8")).hexdigest()[:16]
+        command_sessions.setdefault(command_id, set()).add(session)
+        evidence = command_evidence.setdefault(command_id, {"command": command[:500], "event_count": 0, "first_seen": None, "last_seen": None})
+        evidence["event_count"] += 1
+        timestamp = row.get("timestamp")
+        if timestamp:
+            evidence["first_seen"] = min(filter(None, [evidence["first_seen"], timestamp])) if evidence["first_seen"] else timestamp
+            evidence["last_seen"] = max(filter(None, [evidence["last_seen"], timestamp])) if evidence["last_seen"] else timestamp
+    command_cap = max(1, node_limit // 4)
+    selected_commands = sorted(command_evidence.items(), key=lambda pair: (-pair[1]["event_count"], pair[0]))[:command_cap]
+    for command_id, evidence in selected_commands:
+        if not add_node(command_id, "command", evidence["command"], **evidence):
+            continue
+        for session in sorted(command_sessions[command_id]):
+            add_edge(f"session:{session}", command_id, "recorded_command", explanation="This exact command was recorded in this session.")
+
+    # Reuse the existing alert rules and attach each alert only to sessions
+    # explicitly listed in its evidence scope.
+    alert_rows = pd.DataFrame(rows)
+    generated_alerts = analysis.generate_threat_alerts(alert_rows)
+    alert_cap = max(1, node_limit // 4)
+    for alert in generated_alerts[:alert_cap]:
+        alert_id = f"alert:{alert['alert_id']}"
+        if not add_node(alert_id, "alert", alert["rule_name"], alert_id=alert["alert_id"],
+                        source_ip=alert["source_ip"], severity=alert["severity"],
+                        first_seen=alert["first_seen"], last_seen=alert["last_seen"],
+                        event_count=alert["event_count"], rule_id=alert["rule_id"],
+                        explanation=alert["severity_rationale"], evidence=alert["evidence"]):
+            continue
+        for session in alert["session_ids"]:
+            add_edge(f"session:{session}", alert_id, "alert_evidence", explanation="This alert aggregates qualifying recorded events from this session.")
+
+    # Existing ATT&CK mapper determines mappings. Source links are source-level
+    # aggregates; command links are added only for exact observed examples.
+    for technique in mitre.map_events(event_rows):
+        technique_id = technique["technique_id"]
+        tech_node = f"technique:{technique_id}"
+        if not add_node(tech_node, "technique", f"{technique_id} · {technique['name']}",
+                        technique_id=technique_id, name=technique["name"], tactic=technique["tactic"],
+                        confidence=technique["confidence"], event_count=technique["event_count"],
+                        first_seen=technique["first_seen"], last_seen=technique["last_seen"],
+                        rationale=technique["rationale"], official_url=technique["official_url"]):
+            continue
+        for source in technique["sources"]:
+            ip = str(source["src_ip"])
+            add_edge(f"ip:{ip}", tech_node, "mapped_source_evidence", explanation="The existing ATT&CK mapper returned matching evidence for this source.", event_count=source["event_count"], session_ids=source["session_ids"])
+            source_commands = set(source["evidence_examples"])
+            for command_id, evidence in command_evidence.items():
+                if evidence["command"] in source_commands:
+                    add_edge(command_id, tech_node, "mapped_command_evidence", explanation="The existing ATT&CK rule matched this recorded command.")
+
+    return {
+        "nodes": list(nodes.values()),
+        "edges": list(edges.values()),
+        "scope": {"source_ip": source_ip, "session_id": session_id, "limit": node_limit,
+                  "sessions_included": len(session_ip),
+                  "truncated": (len(sessions) >= session_cap
+                                or len(command_evidence) > command_cap
+                                or len(generated_alerts) > alert_cap
+                                or len(nodes) >= node_limit)},
+        "relationship_notes": {
+            "recorded_session": "Source IP to session recorded in the events table.",
+            "recorded_command": "Session to exact command recorded in that session.",
+            "alert_evidence": "Session to alert whose aggregated evidence includes that session.",
+            "mapped_source_evidence": "Source IP to technique returned by the existing evidence mapper.",
+            "mapped_command_evidence": "Exact observed command matched by the existing evidence mapper.",
+        },
+    }
 
 
 def similar_attackers(src_ip: str, f: Filters, db_path=None, limit: int = 5) -> list[dict] | None:

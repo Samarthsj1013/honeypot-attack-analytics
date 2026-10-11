@@ -4019,6 +4019,44 @@ button {
   background: rgba(245, 158, 11, .12);
 }
 
+.attack-graph-panel { min-width: 0; overflow: hidden; }
+.attack-graph-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: 14px 0 10px; }
+.attack-graph-controls label { display: grid; gap: 5px; min-width: 150px; color: #8091a8; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.attack-graph-controls input { min-width: 0; width: 100%; padding: 8px; border: 1px solid #24364b; border-radius: 5px; background: #0a121e; color: #dbe7f5; font-size: 11px; }
+.attack-graph-controls button, .attack-graph-toolbar button { border: 1px solid #293b51; border-radius: 5px; padding: 7px 9px; background: #101c2b; color: #b8c8db; cursor: pointer; font-size: 10px; }
+.attack-graph-type-filters, .attack-graph-legend { display: flex; flex-wrap: wrap; gap: 9px 16px; margin: 9px 0 12px; }
+.attack-graph-type-filters label, .attack-graph-legend span { display: inline-flex; align-items: center; gap: 6px; color: #9aabc0; font-size: 10px; }
+.attack-graph-type-filters input { accent-color: #38bdf8; }
+.attack-graph-type-filters i, .attack-graph-legend i { width: 8px; height: 8px; border-radius: 50%; }
+.attack-graph-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 280px); gap: 12px; min-width: 0; }
+.attack-graph-canvas-wrap { min-width: 0; overflow: hidden; border: 1px solid #17263a; border-radius: 7px; background: #08111d; }
+.attack-graph-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; color: #72849c; font-size: 10px; }
+.attack-graph-toolbar div { display: flex; gap: 5px; }
+.attack-graph-svg { display: block; width: 100%; max-height: 660px; min-height: 450px; background-image: radial-gradient(#26374b 0.7px, transparent 0.7px); background-size: 20px 20px; touch-action: none; cursor: grab; }
+.attack-graph-svg:active { cursor: grabbing; }
+.attack-graph-edge { stroke: #33465d; stroke-width: 1.5; opacity: .78; }
+.attack-graph-node { cursor: pointer; outline: none; }
+.attack-graph-node circle { stroke: #07101c; stroke-width: 3; }
+.attack-graph-node circle.selected { stroke: #f8fafc; stroke-width: 3; }
+.attack-graph-node text { fill: #c4d2e2; font-size: 10px; pointer-events: none; }
+.attack-graph-detail { min-width: 0; max-height: 660px; overflow: auto; padding: 12px; border: 1px solid #17263a; border-radius: 7px; background: #0a121e; color: #93a4ba; font-size: 10px; }
+.attack-graph-detail-title { color: #71839b; font-size: 9px; font-weight: 800; letter-spacing: .08em; }
+.attack-graph-detail h4 { overflow-wrap: anywhere; margin: 6px 0 10px; color: #e2e8f0; font-size: 12px; }
+.attack-graph-node-type { display: block; margin-top: 12px; font-size: 9px; text-transform: uppercase; }
+.attack-graph-evidence { display: grid; gap: 7px; margin: 10px 0; }
+.attack-graph-evidence div { border-bottom: 1px solid #17263a; padding-bottom: 5px; }
+.attack-graph-evidence dt { color: #73869d; font-size: 8px; text-transform: uppercase; }
+.attack-graph-evidence dd { overflow-wrap: anywhere; margin: 3px 0 0; color: #bdcad9; line-height: 1.4; }
+.attack-graph-detail .source-ip-button { display: block; margin: 6px 0; }
+.attack-graph-detail a { color: #60a5fa; }
+.attack-graph-note { display: block; margin: 10px 0 0; color: #6f8299; font-size: 9px; line-height: 1.5; }
+
+@media (max-width: 900px) {
+  .attack-graph-layout { grid-template-columns: minmax(0, 1fr); }
+  .attack-graph-detail { max-height: 360px; }
+  .attack-graph-svg { max-height: 520px; }
+}
+
 @media (max-width: 700px) {
   .mitre-summary-grid {
     grid-template-columns: 1fr;
