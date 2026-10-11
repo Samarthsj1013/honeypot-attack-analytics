@@ -149,6 +149,22 @@ def create_app(db_path=None) -> FastAPI:
             limit,
         )
 
+    @router.get("/campaigns")
+    def attack_campaigns(
+        f: Filters = Depends(get_filters),
+    ) -> list[dict]:
+        return service.attack_campaigns(f, db_path)
+
+    @router.get("/campaigns/{campaign_id}")
+    def attack_campaign_detail(
+        campaign_id: str,
+        f: Filters = Depends(get_filters),
+    ) -> dict:
+        campaign = service.attack_campaign_detail(campaign_id, f, db_path)
+        if campaign is None:
+            raise HTTPException(status_code=404, detail="Candidate campaign not found for the current filters")
+        return campaign
+
     @router.get("/attackers/{src_ip}")
     def attacker_profile(
         src_ip: str,

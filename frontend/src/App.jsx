@@ -1828,7 +1828,67 @@ function AttackerMap({ data, filters }) {
 
   const [intentError, setIntentError] = useState("");
 
+  const [campaigns, setCampaigns] = useState([]);
+
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
+
+  const [campaignsError, setCampaignsError] = useState("");
+
+  const [selectedCampaignId, setSelectedCampaignId] = useState(null);
+
+  const [campaignDetail, setCampaignDetail] = useState(null);
+
+  const [campaignDetailError, setCampaignDetailError] = useState("");
+
   const preserveUnmappedSelection = useRef(false);
+
+  useEffect(() => {
+    async function loadCampaigns() {
+      try {
+        setCampaignsLoading(true);
+        setCampaignsError("");
+        const params = {};
+        if (filters.start) params.start = filters.start;
+        if (filters.end) params.end = filters.end;
+        if (filters.behavior) params.behavior = filters.behavior;
+        const response = await axios.get(`${API}/api/campaigns`, { params });
+        if (!Array.isArray(response.data)) throw new Error("Unexpected campaign response");
+        setCampaigns(response.data);
+      } catch (err) {
+        console.error("Failed to load candidate campaigns:", err);
+        setCampaigns([]);
+        setCampaignsError("Unable to load candidate campaigns.");
+      } finally {
+        setCampaignsLoading(false);
+      }
+    }
+    loadCampaigns();
+  }, [filters]);
+
+  useEffect(() => {
+    if (!selectedCampaignId) {
+      setCampaignDetail(null);
+      return;
+    }
+    async function loadCampaignDetail() {
+      try {
+        setCampaignDetailError("");
+        const params = {};
+        if (filters.start) params.start = filters.start;
+        if (filters.end) params.end = filters.end;
+        if (filters.behavior) params.behavior = filters.behavior;
+        const response = await axios.get(
+          `${API}/api/campaigns/${encodeURIComponent(selectedCampaignId)}`, { params }
+        );
+        setCampaignDetail(response.data);
+      } catch (err) {
+        console.error("Failed to load candidate campaign:", err);
+        setCampaignDetail(null);
+        setCampaignDetailError("This candidate campaign is unavailable for the current filters.");
+      }
+    }
+    loadCampaignDetail();
+  }, [selectedCampaignId, filters]);
 
   useEffect(() => {
 
@@ -2096,21 +2156,11 @@ function AttackerMap({ data, filters }) {
     loadIntent();
   }, [selectedIp, filters]);
 
-  if (!data.length) {
-
-    return (
-
-      <EmptyState text="No geolocation data for this filter." />
-
-    );
-
-  }
-
   return (
 
     <div className="attacker-map">
 
-      <MapContainer
+      {data.length ? <MapContainer
 
         center={[20, 0]}
 
@@ -2165,15 +2215,15 @@ function AttackerMap({ data, filters }) {
 
         })}
 
-      </MapContainer>
+      </MapContainer> : <EmptyState text="No geolocation data for this filter." />}
 
-      {tileUnavailable && (
+      {data.length > 0 && tileUnavailable && (
         <div className="map-basemap-warning">
           Map tiles could not load. Check your internet connection or tile-provider access.
         </div>
       )}
 
-      <div className="map-footer">
+      {data.length > 0 && <div className="map-footer">
 
         <div className="map-legend">
 
@@ -2205,9 +2255,9 @@ function AttackerMap({ data, filters }) {
 
         </span>
 
-      </div>
+      </div>}
 
-      <div className="map-disclaimer">
+      {data.length > 0 && <div className="map-disclaimer">
 
         IP geolocation is approximate and represents the registered
 
@@ -2215,7 +2265,69 @@ function AttackerMap({ data, filters }) {
 
         location of an attacker.
 
-      </div>
+      </div>}
+
+      <section className="attacker-profile-panel campaign-panel">
+        <div className="attacker-profile-kicker">CANDIDATE ATTACK CAMPAIGNS</div>
+        <p className="campaign-caveat">
+          Shared honeypot behavior is evidence for correlation only; it does not prove common ownership,
+          coordination, or attribution.
+        </p>
+        {campaignsLoading ? (
+          <div className="attacker-profile-loading">Loading candidate campaigns…</div>
+        ) : campaignsError ? (
+          <div className="attacker-profile-error">{campaignsError}</div>
+        ) : !campaigns.length ? (
+          <div className="attacker-profile-empty">No candidate campaigns meet the evidence threshold for these filters.</div>
+        ) : (
+          <div className="campaign-list">
+            {campaigns.map((campaign) => (
+              <button
+                type="button"
+                className="attacker-similarity-row campaign-row"
+                key={campaign.campaign_id}
+                onClick={() => setSelectedCampaignId(
+                  selectedCampaignId === campaign.campaign_id ? null : campaign.campaign_id
+                )}
+              >
+                <span className="attacker-similarity-main">
+                  <strong>{campaign.campaign_id}</strong>
+                  <small>{campaign.attacker_count} attackers · {campaign.confidence_level} confidence</small>
+                </span>
+                <span>{campaign.first_seen ? new Date(campaign.first_seen).toLocaleDateString() : "Unknown"}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {selectedCampaignId && (campaignDetailError ? (
+          <div className="attacker-profile-error">{campaignDetailError}</div>
+        ) : campaignDetail ? (
+          <div className="campaign-detail">
+            <div className="attacker-profile-list-title">
+              {campaignDetail.label} · {campaignDetail.attacker_count} ATTACKERS · {campaignDetail.confidence_level} CONFIDENCE
+            </div>
+            <p>{campaignDetail.explanation}</p>
+            <div className="campaign-evidence">
+              {campaignDetail.evidence.map((item) => <div key={item}>{item}</div>)}
+            </div>
+            <div className="attacker-profile-list-title">MEMBER IPs</div>
+            {campaignDetail.members.map((member) => (
+              <button
+                type="button"
+                className="attacker-similarity-row campaign-member"
+                key={member.src_ip}
+                onClick={() => {
+                  preserveUnmappedSelection.current = !data.some((point) => point.src_ip === member.src_ip);
+                  setSelectedIp(member.src_ip);
+                }}
+              >
+                <span>{member.src_ip}</span>
+                <small>{member.sessions} sessions</small>
+              </button>
+            ))}
+          </div>
+        ) : <div className="attacker-profile-loading">Loading campaign details…</div>)}
+      </section>
 
       {selectedIp && (
 

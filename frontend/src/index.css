@@ -2362,6 +2362,48 @@ tbody tr:last-child td {
 
 }
 
+.campaign-panel {
+  padding: 14px;
+}
+
+.campaign-caveat,
+.campaign-detail p {
+  color: #8ea2bb;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.campaign-list,
+.campaign-evidence {
+  display: grid;
+  gap: 6px;
+}
+
+.campaign-row,
+.campaign-member {
+  color: #cbd5e1;
+  text-align: left;
+}
+
+.campaign-detail {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #17263a;
+}
+
+.campaign-evidence > div {
+  color: #8ea2bb;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.campaign-member {
+  display: flex;
+  justify-content: space-between;
+}
+
 .attacker-intent-panel {
   margin-top: 14px;
   padding: 12px;

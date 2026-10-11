@@ -761,6 +761,20 @@ def attacker_intent(src_ip: str, f: Filters, db_path=None) -> dict | None:
         **analysis.classify_attack_intent(attacker),
     }
 
+
+def attack_campaigns(f: Filters, db_path=None) -> list[dict]:
+    """Return candidate campaigns detected within the active filters."""
+    campaigns = analysis.correlate_attack_campaigns(load_sessions(f, db_path))
+    return [{key: value for key, value in row.items() if key != "members"} for row in campaigns]
+
+
+def attack_campaign_detail(campaign_id: str, f: Filters, db_path=None) -> dict | None:
+    """Return one campaign and its member details within the active filters."""
+    for campaign in analysis.correlate_attack_campaigns(load_sessions(f, db_path)):
+        if campaign["campaign_id"] == campaign_id:
+            return campaign
+    return None
+
 def similar_attackers(src_ip: str, f: Filters, db_path=None, limit: int = 5) -> list[dict] | None:
     """Rank other attackers using normalized Attacker DNA metrics."""
     df = load_sessions(f, db_path)

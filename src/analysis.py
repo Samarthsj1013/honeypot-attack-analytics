@@ -1,5 +1,6 @@
 """IP risk scoring, credential analysis and table-saving helpers."""
 import re
+from hashlib import sha256
 
 import numpy as np
 import pandas as pd
@@ -314,6 +315,173 @@ def classify_attack_intent(sessions: pd.DataFrame) -> dict:
             "A successful honeypot login does not prove compromise of a real system."
         ),
     }
+
+
+def correlate_attack_campaigns(sessions: pd.DataFrame) -> list[dict]:
+    """Group candidate campaigns from shared, observed session behavior.
+
+    Geography and risk scores are excluded. A pair needs multiple shared
+    command patterns, or corroborating behavior plus activity/timing evidence.
+    """
+    if sessions is None or sessions.empty or "src_ip" not in sessions:
+        return []
+
+    tool_pattern = re.compile(
+        r"\b(wget|curl|ftp|tftp|certutil(?:\.exe)?|bitsadmin(?:\.exe)?|"
+        r"invoke-webrequest|iwr)\b", re.IGNORECASE
+    )
+    ip_pattern = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+    url_pattern = re.compile(r"https?://\S+", re.IGNORECASE)
+    token_pattern = re.compile(r"\b[a-f0-9]{12,}\b", re.IGNORECASE)
+
+    profiles = {}
+    for ip, rows in sessions.dropna(subset=["src_ip"]).groupby("src_ip", sort=True):
+        ip = str(ip)
+        commands, tools, raw_commands = set(), set(), set()
+        for value in rows.get("commands", pd.Series(dtype=str)).dropna().astype(str):
+            for command in re.split(r"\s+;\s+", value):
+                command = " ".join(command.strip().lower().split())
+                if not command:
+                    continue
+                raw_commands.add(command)
+                tools.update(match.lower() for match in tool_pattern.findall(command))
+                normalized = url_pattern.sub("<url>", command)
+                normalized = ip_pattern.sub("<ip>", normalized)
+                normalized = token_pattern.sub("<token>", normalized)
+                commands.add(normalized)
+
+        behaviors = set(
+            rows.get("behavior", pd.Series(dtype=str)).dropna().astype(str).str.strip()
+        ) - {"", "Unclustered"}
+
+        def metric(column, aggregation):
+            if column not in rows:
+                return None
+            values = pd.to_numeric(rows[column], errors="coerce").dropna()
+            return float(aggregation(values)) if not values.empty else None
+
+        times = pd.to_datetime(
+            rows.get("start_time", pd.Series(dtype=object)), errors="coerce", utc=True
+        ).dropna()
+        profiles[ip] = {
+            "commands": commands, "raw_commands": raw_commands, "tools": tools,
+            "behaviors": behaviors,
+            "activity": {
+                "events_per_session": metric("n_events", lambda values: values.mean()),
+                "commands_per_session": metric("n_commands", lambda values: values.mean()),
+                "failed_logins_per_session": metric("n_failed_logins", lambda values: values.mean()),
+                "median_duration_sec": metric("duration_sec", lambda values: values.median()),
+                "mean_event_gap_sec": metric("avg_gap_sec", lambda values: values.mean()),
+            },
+            "rows": rows, "first_seen": times.min() if not times.empty else None,
+            "last_seen": times.max() if not times.empty else None,
+        }
+
+    def activity_similarity(left, right):
+        similarities, has_timing = [], False
+        for key, a in left["activity"].items():
+            b = right["activity"][key]
+            if a is None or b is None:
+                continue
+            if a == 0 and b == 0:
+                continue
+            if key in {"median_duration_sec", "mean_event_gap_sec"}:
+                has_timing = True
+            scale = max(abs(a), abs(b), 1.0)
+            similarities.append(max(0.0, 1.0 - abs(a - b) / scale))
+        return has_timing and len(similarities) >= 2 and sum(similarities) / len(similarities) >= 0.8
+
+    parents = {ip: ip for ip in profiles}
+
+    def find(ip):
+        while parents[ip] != ip:
+            parents[ip] = parents[parents[ip]]
+            ip = parents[ip]
+        return ip
+
+    pair_evidence = []
+    ips = sorted(profiles)
+    for index, ip in enumerate(ips):
+        for other_ip in ips[index + 1:]:
+            left, right = profiles[ip], profiles[other_ip]
+            shared_commands = left["commands"] & right["commands"]
+            shared_tools = left["tools"] & right["tools"]
+            shared_behaviors = left["behaviors"] & right["behaviors"]
+            similar_activity = activity_similarity(left, right)
+            qualifies = (
+                len(shared_commands) >= 2
+                or (bool(shared_commands) and bool(shared_behaviors) and similar_activity)
+                or (not shared_commands and bool(shared_tools) and bool(shared_behaviors) and similar_activity)
+            )
+            if not qualifies:
+                continue
+            pair_evidence.append((ip, other_ip, shared_commands, shared_tools, shared_behaviors, similar_activity))
+            root_a, root_b = find(ip), find(other_ip)
+            if root_a != root_b:
+                parents[max(root_a, root_b)] = min(root_a, root_b)
+
+    components = {}
+    for ip in ips:
+        components.setdefault(find(ip), []).append(ip)
+    campaigns = []
+    for members in components.values():
+        if len(members) < 2:
+            continue
+        member_set = set(members)
+        pairs = [pair for pair in pair_evidence if pair[0] in member_set and pair[1] in member_set]
+        indicators = {}
+        for ip, other_ip, shared_commands, shared_tools, shared_behaviors, similar_activity in pairs:
+            for kind, values in (("command_pattern", shared_commands), ("download_tool", shared_tools),
+                                 ("behavior", shared_behaviors)):
+                for value in values:
+                    item = indicators.setdefault((kind, value), {"ips": set(), "pairs": 0})
+                    item["ips"].update((ip, other_ip))
+                    item["pairs"] += 1
+            if similar_activity:
+                item = indicators.setdefault(("activity_timing", "Similar session activity and timing"),
+                                             {"ips": set(), "pairs": 0})
+                item["ips"].update((ip, other_ip))
+                item["pairs"] += 1
+
+        shared_indicators = [
+            {"type": kind, "value": value, "attacker_count": len(item["ips"]), "pair_count": item["pairs"]}
+            for (kind, value), item in sorted(indicators.items())
+        ]
+        evidence = []
+        for item in shared_indicators:
+            labels = {"command_pattern": "Shared command pattern observed",
+                      "download_tool": "Shared download tool observed",
+                      "behavior": "Shared behavior classification"}
+            evidence.append(f"{labels.get(item['type'], item['value'])}: {item['value']}"
+                            if item["type"] != "activity_timing" else item["value"])
+        strong = sum(item["type"] == "command_pattern" for item in shared_indicators) >= 2
+        timestamps = [profiles[ip][key] for ip in members for key in ("first_seen", "last_seen")
+                      if profiles[ip][key] is not None]
+        member_details = []
+        for ip in members:
+            profile = profiles[ip]
+            member_details.append({
+                "src_ip": ip, "sessions": int(len(profile["rows"])),
+                "first_seen": profile["first_seen"].isoformat() if profile["first_seen"] is not None else None,
+                "last_seen": profile["last_seen"].isoformat() if profile["last_seen"] is not None else None,
+                "behaviors": sorted(profile["behaviors"]), "commands": sorted(profile["raw_commands"])[:5],
+            })
+        campaigns.append({
+            "campaign_id": "campaign_" + sha256("|".join(members).encode("utf-8")).hexdigest()[:12],
+            "label": "Candidate Campaign", "attacker_count": len(members), "member_ips": members,
+            "first_seen": min(timestamps).isoformat() if timestamps else None,
+            "last_seen": max(timestamps).isoformat() if timestamps else None,
+            "shared_indicators": shared_indicators, "evidence": evidence,
+            "explanation": (
+                "These attackers are grouped because their filtered honeypot sessions share multiple "
+                "behavioral indicators listed here. Shared behavior does not establish common ownership, "
+                "coordination, or attribution."
+            ),
+            "confidence_level": "High" if strong else "Medium",
+            "confidence_note": "Qualitative evidence strength reflects the variety of shared observed indicators.",
+            "members": member_details,
+        })
+    return sorted(campaigns, key=lambda row: (row["first_seen"] or "", row["campaign_id"]))
 
 
 def top_credential_pairs(n: int = 10, db_path=None) -> pd.DataFrame:
