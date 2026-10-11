@@ -350,8 +350,19 @@ def create_app(db_path=None) -> FastAPI:
     def similar_attackers(
         src_ip: str,
         f: Filters = Depends(get_filters),
+        min_similarity: float = Query(0, ge=0, le=100),
+        risk_level: Literal["Low", "Medium", "High"] | None = None,
+        search: str | None = Query(default=None, max_length=45),
+        sort_by: Literal["similarity", "risk_score", "sessions"] = "similarity",
+        sort_order: Literal["asc", "desc"] = "desc",
+        limit: int = Query(5, ge=1, le=100),
+        offset: int = Query(0, ge=0),
     ) -> list[dict]:
-        matches = service.similar_attackers(src_ip, f, db_path)
+        matches = service.similar_attackers(
+            src_ip, f, db_path, limit=limit, offset=offset,
+            min_similarity=min_similarity, risk_level=risk_level, search=search,
+            sort_by=sort_by, sort_order=sort_order,
+        )
         if matches is None:
             raise HTTPException(
                 status_code=404,

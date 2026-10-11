@@ -2305,7 +2305,7 @@ function ThreatAlerts({ filters, onSelectAttacker }) {
   const updateDraft = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
 
   return (
-    <section className="attacker-profile-panel threat-alerts-panel">
+    <section id="alerts" className="attacker-profile-panel threat-alerts-panel">
       <div className="threat-hunt-heading">
         <div>
           <div className="attacker-profile-kicker">AUTOMATED THREAT ALERTS</div>
@@ -2440,6 +2440,22 @@ function AttackerMap({ data, filters, selectedAttacker = "" }) {
 
   const [similarError, setSimilarError] = useState("");
 
+  const [similarPage, setSimilarPage] = useState(0);
+
+  const [similarMinScore, setSimilarMinScore] = useState("");
+
+  const [similarRiskFilter, setSimilarRiskFilter] = useState("");
+
+  const [similarSortBy, setSimilarSortBy] = useState("similarity");
+
+  const [similarSortOrder, setSimilarSortOrder] = useState("desc");
+
+  const [similarSearch, setSimilarSearch] = useState("");
+
+  const [similarSourceInput, setSimilarSourceInput] = useState("");
+
+  const [similarComparison, setSimilarComparison] = useState(null);
+
   const [intent, setIntent] = useState(null);
 
   const [intentLoading, setIntentLoading] = useState(false);
@@ -2521,6 +2537,18 @@ function AttackerMap({ data, filters, selectedAttacker = "" }) {
     }
     loadCampaignDetail();
   }, [selectedCampaignId, filters]);
+
+  useEffect(() => {
+
+    setSimilarSourceInput(selectedIp || "");
+
+  }, [selectedIp]);
+
+  useEffect(() => {
+
+    setSimilarPage(0);
+
+  }, [selectedIp, filters, similarMinScore, similarRiskFilter, similarSortBy, similarSortOrder, similarSearch]);
 
   useEffect(() => {
 
@@ -2696,6 +2724,8 @@ function AttackerMap({ data, filters, selectedAttacker = "" }) {
 
     }
 
+    let active = true;
+
     async function loadSimilarAttackers() {
 
       try {
@@ -2704,13 +2734,24 @@ function AttackerMap({ data, filters, selectedAttacker = "" }) {
 
         setSimilarError("");
 
-        const params = {};
+        const params = {
+          limit: 11,
+          offset: similarPage * 10,
+          sort_by: similarSortBy,
+          sort_order: similarSortOrder,
+        };
 
         if (filters.start) params.start = filters.start;
 
         if (filters.end) params.end = filters.end;
 
         if (filters.behavior) params.behavior = filters.behavior;
+
+        if (similarMinScore !== "") params.min_similarity = Number(similarMinScore);
+
+        if (similarRiskFilter) params.risk_level = similarRiskFilter;
+
+        if (similarSearch.trim()) params.search = similarSearch.trim();
 
         const response = await axios.get(
 
@@ -2726,26 +2767,26 @@ function AttackerMap({ data, filters, selectedAttacker = "" }) {
 
         }
 
-        setSimilarAttackers(response.data);
+        if (active) setSimilarAttackers(response.data);
 
       } catch (err) {
 
         console.error("Failed to load similar attackers:", err);
 
-        setSimilarAttackers([]);
+        if (active) setSimilarAttackers([]);
 
         const detail = err.response?.data?.detail;
         if (err.response?.status === 404 && detail === "Not Found") {
-          setSimilarError(
+          if (active) setSimilarError(
             "The API server is outdated. Stop it and restart run_api.py from D:\\Desktop\\honeypot-attack-analytics-main."
           );
         } else {
-          setSimilarError("Unable to load similar attackers.");
+          if (active) setSimilarError("Unable to load similar attackers.");
         }
 
       } finally {
 
-        setSimilarLoading(false);
+        if (active) setSimilarLoading(false);
 
       }
 
@@ -2753,7 +2794,9 @@ function AttackerMap({ data, filters, selectedAttacker = "" }) {
 
     loadSimilarAttackers();
 
-  }, [selectedIp, filters]);
+    return () => { active = false; };
+
+  }, [selectedIp, filters, similarPage, similarMinScore, similarRiskFilter, similarSortBy, similarSortOrder, similarSearch]);
 
   useEffect(() => {
     if (!selectedIp) {
@@ -3497,85 +3540,81 @@ function AttackerMap({ data, filters, selectedAttacker = "" }) {
               </section>
 
               <div className="attacker-similarity-panel">
-
-                <div className="attacker-profile-kicker">Similar Attackers</div>
-
+                <div className="attacker-profile-kicker">Advanced Behavioral Similarity</div>
+                <p className="similarity-scope-note">
+                  Evidence-weighted comparison of recorded honeypot activity. Similarity does not establish shared ownership or identity.
+                </p>
+                <p className="similarity-formula-note">Weights: DNA 25%, authentication 20%, distinct commands 20%, ATT&amp;CK 15%, session behavior 10%, download tools 10%. Missing components are omitted and remaining weights are renormalized. Thresholds: Very High ≥85, High ≥70, Moderate ≥50, Low ≥30, Limited &lt;30; fewer than two components is Insufficient Evidence. Without a direct shared indicator, the score is capped at 39%.</p>
+                <div className="similarity-filter-grid">
+                  <label>Compare source IP
+                    <div className="similarity-source-input">
+                      <input value={similarSourceInput} onChange={(event) => setSimilarSourceInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && similarSourceInput.trim()) { preserveUnmappedSelection.current = !data.some((point) => point.src_ip === similarSourceInput.trim()); setSelectedIp(similarSourceInput.trim()); } }} placeholder="Source IP" />
+                      <button type="button" disabled={!similarSourceInput.trim()} onClick={() => { setSimilarComparison(null); preserveUnmappedSelection.current = !data.some((point) => point.src_ip === similarSourceInput.trim()); setSelectedIp(similarSourceInput.trim()); }}>Compare</button>
+                    </div>
+                  </label>
+                  <label>Find similar IP<input value={similarSearch} onChange={(event) => setSimilarSearch(event.target.value)} placeholder="Search candidates" /></label>
+                  <label>Minimum score<input type="number" min="0" max="100" value={similarMinScore} onChange={(event) => setSimilarMinScore(event.target.value)} placeholder="0?100" /></label>
+                  <label>Risk level<select value={similarRiskFilter} onChange={(event) => setSimilarRiskFilter(event.target.value)}><option value="">All risk levels</option><option>High</option><option>Medium</option><option>Low</option></select></label>
+                  <label>Sort by<select value={similarSortBy} onChange={(event) => setSimilarSortBy(event.target.value)}><option value="similarity">Similarity</option><option value="risk_score">Risk score</option><option value="sessions">Session count</option></select></label>
+                  <label>Order<select value={similarSortOrder} onChange={(event) => setSimilarSortOrder(event.target.value)}><option value="desc">Descending</option><option value="asc">Ascending</option></select></label>
+                </div>
                 {similarLoading ? (
-
-                  <div className="attacker-profile-loading">
-
-                    Comparing behavior for the current filters…
-
-                  </div>
-
+                  <div className="attacker-profile-loading">Comparing behavior for the current filters?</div>
                 ) : similarError ? (
-
                   <div className="attacker-profile-error">{similarError}</div>
-
                 ) : similarAttackers.length ? (
-
-                  similarAttackers.map((match) => (
-
-                    <button
-
-                      className="attacker-similarity-row"
-
-                      key={match.src_ip}
-
-                      type="button"
-
-                      onClick={() => {
-
-                        preserveUnmappedSelection.current = !data.some(
-
-                          (point) => point.src_ip === match.src_ip
-
-                        );
-
-                        setSelectedIp(match.src_ip);
-
-                      }}
-
-                    >
-
-                      <span className="attacker-similarity-main">
-
-                        <strong>{match.src_ip}</strong>
-
-                        <small>{(match.reasons || []).join(" · ")}</small>
-
-                      </span>
-
-                      <span className="attacker-similarity-score">
-
-                        {match.similarity_pct}%
-
-                      </span>
-
-                      <span className={`attacker-profile-risk ${String(
-
-                        match.risk_level || ""
-
-                      ).toLowerCase()}`}>
-
-                        {match.risk_level || "Unknown"}
-
-                      </span>
-
-                    </button>
-
-                  ))
-
+                  <>
+                    {similarAttackers.slice(0, 10).map((match) => (
+                      <div className="similarity-result-card" key={match.src_ip}>
+                        <button className="attacker-similarity-row" type="button" onClick={() => {
+                          setSimilarComparison({ comparedSrcIp: selectedIp, match });
+                          preserveUnmappedSelection.current = !data.some((point) => point.src_ip === match.src_ip);
+                          setSelectedIp(match.src_ip);
+                        }}>
+                          <span className="attacker-similarity-main">
+                            <strong>{match.src_ip}</strong>
+                            <small>{match.explanation}</small>
+                            <small>{(match.reasons || []).join(" ? ")}</small>
+                          </span>
+                          <span className="similarity-score-block">
+                            <strong className="attacker-similarity-score">{match.similarity_pct}%</strong>
+                            <small>{match.similarity_category}</small>
+                          </span>
+                          <span className={`attacker-profile-risk ${String(match.risk_level || "").toLowerCase()}`}>{match.risk_level || "Unknown"}</span>
+                        </button>
+                        <details className="similarity-breakdown">
+                          <summary>Evidence coverage {match.evidence_coverage_pct}% ? component breakdown</summary>
+                          <div className="similarity-component-list">
+                            {Object.entries(match.components || {}).map(([name, component]) => (
+                              <div key={name}>
+                                <strong>{name.replaceAll("_", " ")}</strong>
+                                <span>{component.score}% · base {component.weight}% / effective {component.effective_weight_pct}%</span>
+                                <SimilarityEvidence name={name} evidence={component.evidence || {}} />
+                              </div>
+                            ))}
+                            {match.similarity_category === "Insufficient Evidence" && <p>Insufficient comparable observations; missing evidence is not scored as dissimilarity.</p>}
+                          </div>
+                        </details>
+                      </div>
+                    ))}
+                    <div className="similarity-pagination">
+                      <span>Page {similarPage + 1} ? {similarAttackers.slice(0, 10).length} candidates</span>
+                      <button type="button" disabled={similarPage === 0 || similarLoading} onClick={() => setSimilarPage((page) => Math.max(0, page - 1))}>Previous</button>
+                      <button type="button" disabled={similarAttackers.length <= 10 || similarLoading} onClick={() => setSimilarPage((page) => page + 1)}>Next</button>
+                    </div>
+                  </>
                 ) : (
-
-                  <div className="attacker-profile-empty">
-
-                    No other attackers match the current filters.
-
-                  </div>
-
+                  <div className="attacker-profile-empty">No other attackers match the current filters.</div>
                 )}
-
+                {similarComparison && <SimilarityComparison
+                  comparedSrcIp={similarComparison.comparedSrcIp}
+                  match={similarComparison.match}
+                  onSelectProfile={(ip) => {
+                    preserveUnmappedSelection.current = !data.some((point) => point.src_ip === ip);
+                    setSelectedIp(ip);
+                  }}
+                  onClose={() => setSimilarComparison(null)}
+                />}
               </div>
 
               <div className="attacker-profile-columns">
@@ -3718,6 +3757,139 @@ function AttackerMap({ data, filters, selectedAttacker = "" }) {
 
   );
 
+}
+
+const SIMILARITY_TECHNIQUE_NAMES = {
+  "T1110.001": "Password Guessing",
+  "T1059.004": "Unix Shell",
+  T1105: "Ingress Tool Transfer",
+  T1082: "System Information Discovery",
+  T1083: "File and Directory Discovery",
+  "T1087.001": "Account Discovery: Local Account",
+  T1033: "System Owner/User Discovery",
+};
+
+function SimilarityEvidence({ name, evidence }) {
+  const unavailable = <span className="similarity-evidence-empty">Insufficient evidence</span>;
+  const list = (values, render = (value) => value) =>
+    Array.isArray(values) && values.length ? (
+      <span className="similarity-evidence-list">{values.map((value, index) => <span key={`${String(value)}-${index}`}>{render(value)}</span>)}</span>
+    ) : unavailable;
+  const count = (value) => value === null || value === undefined || value === ""
+    ? "Not available"
+    : Number.isFinite(Number(value)) ? Number(value).toLocaleString() : String(value);
+  let fields = [];
+
+  if (name === "behavioral_dna") {
+    fields = [
+      ["Shared traits", list(evidence.shared_traits)],
+      ["DNA metric similarity", Number.isFinite(evidence.metric_similarity) ? `${evidence.metric_similarity}%` : "Not available"],
+    ];
+  } else if (name === "authentication") {
+    fields = [
+      ["Shared usernames", list(evidence.shared_usernames)],
+      ["Failed logins", `Selected ${count(evidence.selected_failed_login_events)} · Candidate ${count(evidence.candidate_failed_login_events)}`],
+      ["Successful honeypot logins", `Selected ${count(evidence.selected_successful_login_events)} · Candidate ${count(evidence.candidate_successful_login_events)}`],
+      ["Shared event types", list(evidence.shared_event_types)],
+    ];
+  } else if (name === "commands") {
+    fields = [
+      ["Shared commands", count(evidence.shared_count)],
+      ["Unique commands", `Selected ${count(evidence.selected_unique_count)} · Candidate ${count(evidence.candidate_unique_count)}`],
+      ["Shared command examples", list(evidence.shared_examples, (value) => <code>{value}</code>)],
+    ];
+  } else if (name === "mitre") {
+    fields = [["Shared techniques", list(evidence.shared_techniques, (id) => <>{id}{SIMILARITY_TECHNIQUE_NAMES[id] ? ` · ${SIMILARITY_TECHNIQUE_NAMES[id]}` : ""}</> )]];
+  } else if (name === "sessions") {
+    const stats = (value) => {
+      if (!value || typeof value !== "object") return "Not available";
+      const metrics = [
+        ["sessions", value.session_count], ["events", value.n_events],
+        ["failed logins", value.n_failed_logins], ["commands", value.n_commands],
+        ["duration", Number.isFinite(value.duration_sec) ? `${value.duration_sec.toFixed(1)}s` : null],
+        ["avg gap", Number.isFinite(value.avg_gap_sec) ? `${value.avg_gap_sec.toFixed(1)}s` : null],
+      ].filter(([, metric]) => metric !== null && metric !== undefined);
+      if (value.login_success !== null && value.login_success !== undefined) metrics.push(["login success rate", `${(value.login_success * 100).toFixed(1)}%`]);
+      return metrics.length ? metrics.map(([label, metric]) => `${label} ${metric}`).join(" · ") : "Not available";
+    };
+    fields = [
+      ["Shared behavior", list(evidence.shared_behaviors)],
+      ["Selected activity", stats(evidence.selected)],
+      ["Candidate activity", stats(evidence.candidate)],
+    ];
+  } else if (name === "downloads") {
+    fields = [
+      ["Shared tools", list(evidence.shared_tools)],
+      ["Recorded examples · selected", list(evidence.selected_examples, (value) => <code>{value}</code>)],
+      ["Recorded examples · candidate", list(evidence.candidate_examples, (value) => <code>{value}</code>)],
+    ];
+  }
+
+  return (
+    <div className="similarity-evidence-grid">
+      {fields.length ? fields.map(([label, value]) => (
+        <div className="similarity-evidence-field" key={label}>
+          <strong>{label}</strong>
+          <div>{value}</div>
+        </div>
+      )) : <span className="similarity-evidence-empty">Not available</span>}
+    </div>
+  );
+}
+
+function SimilarityComparison({ comparedSrcIp, match, onSelectProfile, onClose }) {
+  const comparison = match?.comparison;
+  if (!comparison) return null;
+  const profiles = [comparison.selected, comparison.candidate];
+  const formatList = (values) => values?.length ? values.join(" · ") : "No recorded evidence";
+  return (
+    <section className="similarity-comparison">
+      <div className="similarity-comparison-header">
+        <div><strong>Side-by-side behavioral comparison</strong><small>{comparedSrcIp} ↔ {match.src_ip} · {match.similarity_pct}% {match.similarity_category}</small></div>
+        <button type="button" onClick={onClose}>Close</button>
+      </div>
+      <div className="similarity-profile-pair">
+        {profiles.map((profile) => (
+          <div className="similarity-profile-card" key={profile.src_ip}>
+            <div className="similarity-profile-title"><strong>{profile.src_ip}</strong><span>{profile.risk_level} · risk {Number(profile.risk_score).toFixed(1)}</span></div>
+            <div><small>DNA fingerprint</small><code>{profile.fingerprint}</code></div>
+            <div className="similarity-profile-stats">
+              <span>{profile.sessions} sessions</span>
+              <span>{profile.failed_login_events} failed logins</span>
+              <span>{profile.successful_login_events} successful honeypot logins</span>
+              <span>{profile.command_count} distinct commands</span>
+            </div>
+            <div><small>Observed usernames</small><p>{formatList(profile.usernames)}</p></div>
+            <div><small>Observed commands</small><p>{formatList(profile.commands)}</p></div>
+            <div><small>Mapped ATT&amp;CK techniques</small><p>{formatList(profile.techniques)}</p></div>
+            <div><small>Authentication event patterns</small><p>{formatList(profile.auth_event_types)}</p></div>
+            <div><small>Download-tool indicators</small><p>{formatList(profile.download_tools)}</p></div>
+            <div><small>Session behaviors</small><p>{Object.entries(profile.behaviors || {}).map(([name, count]) => `${name} (${count})`).join(" · ") || "No behavior labels"}</p></div>
+            <details className="similarity-session-statistics"><summary>Session statistics</summary><p>{Object.entries(profile.session_statistics || {}).map(([name, value]) => `${name.replaceAll("_", " ")}: ${Number(value).toFixed(2)}`).join(" · ") || "No session metrics recorded"}</p></details>
+            <button type="button" className="source-ip-button" onClick={() => onSelectProfile(profile.src_ip)}>Open this attacker profile</button>
+          </div>
+        ))}
+      </div>
+      <div className="similarity-shared-evidence">
+        <div><strong>Shared commands</strong><p>{formatList(comparison.shared_commands)}</p></div>
+        <div className="similarity-distinct-pair">
+          <span><strong>Only {comparedSrcIp}</strong><small>{formatList(comparison.distinct_commands?.selected)}</small></span>
+          <span><strong>Only {match.src_ip}</strong><small>{formatList(comparison.distinct_commands?.candidate)}</small></span>
+        </div>
+        <div><strong>Shared command categories</strong><p>{formatList(comparison.shared_command_categories)}</p></div>
+        <div><strong>Shared mapped techniques</strong><p>{formatList(comparison.shared_techniques)}</p></div>
+        <div className="similarity-distinct-pair">
+          <span><strong>Techniques only on {comparedSrcIp}</strong><small>{formatList(comparison.distinct_techniques?.selected)}</small></span>
+          <span><strong>Techniques only on {match.src_ip}</strong><small>{formatList(comparison.distinct_techniques?.candidate)}</small></span>
+        </div>
+        <div><strong>Shared attempted usernames</strong><p>{formatList(comparison.shared_usernames)}</p></div>
+        <div><strong>Shared authentication event types</strong><p>{formatList(comparison.shared_auth_event_types)}</p></div>
+        <div><strong>Evidence unavailable for</strong><p>{formatList(comparison.missing_components?.map((item) => item.replaceAll("_", " ")))}</p></div>
+      </div>
+      <p className="similarity-scope-note">Authentication counts describe honeypot events. Shared behavior is an inference and does not establish common ownership, identity, intent, or real-system compromise.</p>
+      <div className="similarity-navigation-links"><a href="#attack-sources">Attacker Intelligence</a><a href="#alerts">Threat Alerts</a><a href="#mitre-techniques">MITRE Technique Intelligence</a><a href="#attack-graph">Attack Relationship Graph</a></div>
+    </section>
+  );
 }
 
 function DnaMetric({ label, value }) {

@@ -3053,6 +3053,116 @@ tbody tr:last-child td {
 
 }
 
+.similarity-scope-note {
+  margin: 5px 0 10px;
+  color: #71839a;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.similarity-formula-note {
+  margin: 0 0 10px;
+  color: #8396ad;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.similarity-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+
+.similarity-filter-grid > label {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  color: #8192a8;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.similarity-filter-grid input,
+.similarity-filter-grid select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid #24364b;
+  border-radius: 5px;
+  background: #0a121e;
+  color: #cbd5e1;
+  font-size: 10px;
+  text-transform: none;
+}
+
+.similarity-source-input { display: flex; gap: 4px; min-width: 0; }
+.similarity-source-input button,
+.similarity-pagination button,
+.similarity-comparison-header button {
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  border: 1px solid #29415b;
+  border-radius: 5px;
+  background: #102034;
+  color: #a8c5e5;
+  font-size: 9px;
+  cursor: pointer;
+}
+.similarity-source-input button:disabled,
+.similarity-pagination button:disabled { opacity: .45; cursor: default; }
+.similarity-result-card { min-width: 0; border-top: 1px solid #142235; }
+.similarity-result-card .attacker-similarity-row { border-top: 0; }
+.similarity-score-block { display: grid; justify-items: end; gap: 3px; }
+.similarity-score-block small { color: #8da1b9; font-size: 8px; text-align: right; }
+.similarity-breakdown { padding: 0 4px 8px; color: #899bb1; font-size: 9px; }
+.similarity-breakdown summary { cursor: pointer; }
+.similarity-component-list { display: grid; gap: 6px; padding: 8px 0 0; }
+.similarity-component-list > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; padding: 7px; border-radius: 5px; background: #0b1522; }
+.similarity-component-list strong { color: #b9c8da; text-transform: capitalize; }
+.similarity-component-list span { color: #7dd3fc; }
+.similarity-evidence-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 10px; }
+.similarity-evidence-field { display: grid; align-content: start; gap: 3px; min-width: 0; }
+.similarity-evidence-field strong { color: #8195ad; font-size: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: .035em; }
+.similarity-evidence-field > div { min-width: 0; color: #b6c5d8; line-height: 1.4; overflow-wrap: anywhere; }
+.similarity-evidence-list { display: flex; flex-wrap: wrap; gap: 3px; }
+.similarity-evidence-list > span { padding: 1px 4px; border: 1px solid #20344b; border-radius: 3px; background: #101d2d; color: #a8c5e5; }
+.similarity-evidence-list code { color: #a5e4cb; font: inherit; white-space: pre-wrap; }
+.similarity-evidence-empty { color: #72849b; font-style: italic; }
+.similarity-component-list p { margin: 0; color: #fbbf24; }
+.similarity-pagination { display: flex; justify-content: flex-end; align-items: center; gap: 7px; padding: 8px 0; color: #7d90a8; font-size: 9px; }
+.similarity-pagination span { margin-right: auto; }
+.similarity-comparison { margin-top: 12px; padding: 10px; border: 1px solid #1a2b40; border-radius: 7px; background: #0a121e; }
+.similarity-comparison-header,
+.similarity-profile-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.similarity-comparison-header > div { display: grid; gap: 4px; }
+.similarity-comparison-header strong { color: #e2e8f0; font-size: 11px; }
+.similarity-comparison-header small { color: #7dd3fc; font-size: 9px; }
+.similarity-profile-pair,
+.similarity-distinct-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 9px; }
+.similarity-profile-card { display: grid; align-content: start; gap: 8px; min-width: 0; padding: 9px; border: 1px solid #1b2a3d; border-radius: 6px; background: #0c1725; }
+.similarity-profile-title { flex-wrap: wrap; }
+.similarity-profile-title strong { overflow-wrap: anywhere; color: #dbeafe; font-family: "JetBrains Mono", Consolas, monospace; font-size: 10px; }
+.similarity-profile-title span { color: #8fa3ba; font-size: 8px; }
+.similarity-profile-card > div > small,
+.similarity-shared-evidence > div > strong { display: block; color: #73869d; font-size: 8px; font-weight: 800; text-transform: uppercase; }
+.similarity-profile-card code,
+.similarity-profile-card p,
+.similarity-shared-evidence p,
+.similarity-distinct-pair small { display: block; overflow-wrap: anywhere; margin: 3px 0 0; color: #b8c7d9; font-size: 9px; line-height: 1.45; }
+.similarity-profile-stats { display: grid; gap: 3px; color: #91a5bd; font-size: 8px; }
+.similarity-profile-card .source-ip-button { justify-self: start; }
+.similarity-session-statistics summary { color: #8aa0ba; cursor: pointer; font-size: 8px; }
+.similarity-shared-evidence { display: grid; gap: 9px; margin-top: 10px; padding-top: 9px; border-top: 1px solid #1a2a3e; }
+.similarity-distinct-pair span { min-width: 0; }
+.similarity-navigation-links { display: flex; flex-wrap: wrap; gap: 7px 12px; margin-top: 9px; }
+.similarity-navigation-links a { color: #7dd3fc; font-size: 8px; text-decoration: none; }
+.similarity-navigation-links a:hover { text-decoration: underline; }
+
 @media (max-width: 640px) {
 
   .attacker-similarity-row {
@@ -3068,6 +3178,11 @@ tbody tr:last-child td {
     justify-self: end;
 
   }
+
+  .similarity-profile-pair,
+  .similarity-distinct-pair { grid-template-columns: minmax(0, 1fr); }
+
+  .similarity-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 }
 
@@ -4067,4 +4182,10 @@ button {
   .mitre-detail-meta {
     display: grid;
   }
+}
+
+@media (max-width: 640px) {
+  .similarity-component-list > div { grid-template-columns: minmax(0, 1fr); }
+  .similarity-component-list > div > span { justify-self: start; }
+  .similarity-evidence-grid { grid-template-columns: minmax(0, 1fr); }
 }

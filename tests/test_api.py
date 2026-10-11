@@ -1034,6 +1034,56 @@ class TestAPI(unittest.TestCase):
         self.assertTrue(all(0 <= row["similarity_pct"] <= 100 for row in rows))
         self.assertTrue(all(row["risk_level"] and row["reasons"] for row in rows))
 
+        detailed = next(row for row in rows if row["src_ip"] == "2.2.2.2")
+        self.assertEqual(detailed["compared_src_ip"], "1.1.1.1")
+        self.assertIn("components", detailed)
+        self.assertIn("comparison", detailed)
+        self.assertIn("effective_weights_pct", detailed)
+        self.assertTrue(detailed["similarity_category"])
+
+    def test_attacker_similarity_search_filters_sort_and_paginates(self):
+        all_rows = self.client.get(
+            "/api/attackers/1.1.1.1/similar", params={"limit": 100},
+        ).json()
+        self.assertGreaterEqual(len(all_rows), 2)
+        first_page = self.client.get(
+            "/api/attackers/1.1.1.1/similar", params={"limit": 1, "offset": 0},
+        ).json()
+        second_page = self.client.get(
+            "/api/attackers/1.1.1.1/similar", params={"limit": 1, "offset": 1},
+        ).json()
+        self.assertEqual(first_page, all_rows[:1])
+        self.assertEqual(second_page, all_rows[1:2])
+
+        candidate = all_rows[0]
+        searched = self.client.get(
+            "/api/attackers/1.1.1.1/similar",
+            params={"search": candidate["src_ip"], "limit": 100},
+        ).json()
+        self.assertEqual([row["src_ip"] for row in searched], [candidate["src_ip"]])
+        risk_filtered = self.client.get(
+            "/api/attackers/1.1.1.1/similar",
+            params={"risk_level": candidate["risk_level"], "limit": 100},
+        ).json()
+        self.assertTrue(all(row["risk_level"] == candidate["risk_level"] for row in risk_filtered))
+        score_filtered = self.client.get(
+            "/api/attackers/1.1.1.1/similar",
+            params={"min_similarity": candidate["similarity_pct"], "limit": 100},
+        ).json()
+        self.assertTrue(all(row["similarity_pct"] >= candidate["similarity_pct"] for row in score_filtered))
+        risk_sorted = self.client.get(
+            "/api/attackers/1.1.1.1/similar",
+            params={"sort_by": "risk_score", "sort_order": "asc", "limit": 100},
+        ).json()
+        self.assertEqual(
+            risk_sorted,
+            sorted(risk_sorted, key=lambda row: (row["risk_score"], row["src_ip"])),
+        )
+        self.assertEqual(
+            self.client.get("/api/attackers/1.1.1.1/similar", params={"min_similarity": 101}).status_code,
+            422,
+        )
+
     def test_attacker_similarity_respects_date_and_behavior_filters(self):
         dated = self.client.get(
             "/api/attackers/1.1.1.1/similar",
