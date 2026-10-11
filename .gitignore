@@ -16,3 +16,4 @@ data/processed/
 .vscode/
 .DS_Store   
 Thumbs.db
+.venv/
