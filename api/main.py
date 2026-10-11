@@ -11,7 +11,7 @@ Interactive docs:
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from api import service
@@ -147,6 +147,53 @@ def create_app(db_path=None) -> FastAPI:
         return service.attackers(
             service.load_sessions(f, db_path),
             limit,
+        )
+
+    @router.get("/threat-hunt")
+    def threat_hunt(
+        f: Filters = Depends(get_filters),
+        src_ip: str | None = Query(default=None, max_length=45),
+        username: str | None = Query(default=None, max_length=256),
+        command: str | None = Query(default=None, max_length=500),
+        event_type: Literal[
+            "cowrie.session.connect",
+            "cowrie.login.failed",
+            "cowrie.login.success",
+            "cowrie.command.input",
+            "cowrie.session.closed",
+        ] | None = None,
+        risk_level: Literal["Low", "Medium", "High"] | None = None,
+        limit: int = Query(50, ge=1, le=100),
+        offset: int = Query(0, ge=0),
+    ) -> dict:
+        return service.threat_hunt(
+            f, db_path, src_ip=src_ip, username=username, command=command,
+            event_type=event_type, risk_level=risk_level, limit=limit, offset=offset,
+        )
+
+    @router.get("/threat-hunt/export")
+    def threat_hunt_export(
+        f: Filters = Depends(get_filters),
+        src_ip: str | None = Query(default=None, max_length=45),
+        username: str | None = Query(default=None, max_length=256),
+        command: str | None = Query(default=None, max_length=500),
+        event_type: Literal[
+            "cowrie.session.connect",
+            "cowrie.login.failed",
+            "cowrie.login.success",
+            "cowrie.command.input",
+            "cowrie.session.closed",
+        ] | None = None,
+        risk_level: Literal["Low", "Medium", "High"] | None = None,
+    ) -> Response:
+        csv_data = service.threat_hunt_csv(
+            f, db_path, src_ip=src_ip, username=username, command=command,
+            event_type=event_type, risk_level=risk_level,
+        )
+        return Response(
+            content=csv_data,
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="threat-hunt-results.csv"'},
         )
 
     @router.get("/campaigns")

@@ -1798,6 +1798,174 @@ function FocusMarker({
 
 }
 
+function ThreatHunt({ filters, onSelectAttacker }) {
+  const [draft, setDraft] = useState({
+    src_ip: "", username: "", command: "", event_type: "", risk_level: "",
+  });
+  const [search, setSearch] = useState({});
+  const [page, setPage] = useState(0);
+  const [results, setResults] = useState({ items: [], total: 0, limit: 50, has_more: false });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    async function runSearch() {
+      try {
+        setLoading(true);
+        setError("");
+        const params = { limit: 50, offset: page * 50 };
+        if (filters.start) params.start = filters.start;
+        if (filters.end) params.end = filters.end;
+        if (filters.behavior) params.behavior = filters.behavior;
+        Object.entries(search).forEach(([key, value]) => {
+          if (value) params[key] = value;
+        });
+        const response = await axios.get(`${API}/api/threat-hunt`, { params });
+        if (!Array.isArray(response.data?.items)) throw new Error("Unexpected threat hunt response");
+        if (active) setResults(response.data);
+      } catch (err) {
+        console.error("Failed to search honeypot events:", err);
+        if (active) {
+          setResults({ items: [], total: 0, limit: 50, has_more: false });
+          setError(err.response?.data?.detail || "Unable to search recorded events.");
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    runSearch();
+    return () => { active = false; };
+  }, [filters, search, page]);
+
+  const updateDraft = (field, value) => {
+    setDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const submitSearch = (event) => {
+    event.preventDefault();
+    const criteria = Object.fromEntries(
+      Object.entries(draft).map(([key, value]) => [key, value.trim()])
+        .filter(([, value]) => value)
+    );
+    setPage(0);
+    setSearch(criteria);
+  };
+
+  const exportCsv = async () => {
+    try {
+      const params = {};
+      if (filters.start) params.start = filters.start;
+      if (filters.end) params.end = filters.end;
+      if (filters.behavior) params.behavior = filters.behavior;
+      Object.entries(search).forEach(([key, value]) => { params[key] = value; });
+      const response = await axios.get(`${API}/api/threat-hunt/export`, {
+        params, responseType: "blob",
+      });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "threat-hunt-results.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (err) {
+      console.error("Failed to export threat hunt results:", err);
+      setError("Unable to export matching investigation results.");
+    }
+  };
+
+  const startLabel = filters.start || "All dates";
+  const endLabel = filters.end || "Latest";
+  const behaviorLabel = filters.behavior || "All behaviors";
+
+  return (
+    <section className="attacker-profile-panel threat-hunt-panel">
+      <div className="threat-hunt-heading">
+        <div>
+          <div className="attacker-profile-kicker">THREAT HUNTING WORKSPACE</div>
+          <p>Search stored event records. Date and behavior scope follows the dashboard filters.</p>
+        </div>
+        <button type="button" className="threat-hunt-export" onClick={exportCsv} disabled={!results.total}>
+          Export matching CSV
+        </button>
+      </div>
+      <div className="threat-hunt-scope">
+        <span>Date: {startLabel} – {endLabel}</span>
+        <span>Behavior: {behaviorLabel}</span>
+      </div>
+      <form className="threat-hunt-filters" onSubmit={submitSearch}>
+        <label>Source IP<input value={draft.src_ip} onChange={(event) => updateDraft("src_ip", event.target.value)} placeholder="Exact IP" /></label>
+        <label>Username<input value={draft.username} onChange={(event) => updateDraft("username", event.target.value)} placeholder="Contains…" /></label>
+        <label>Command text<input value={draft.command} onChange={(event) => updateDraft("command", event.target.value)} placeholder="Contains…" /></label>
+        <label>Event type
+          <select value={draft.event_type} onChange={(event) => updateDraft("event_type", event.target.value)}>
+            <option value="">All event types</option>
+            <option value="cowrie.session.connect">Session connected</option>
+            <option value="cowrie.login.failed">Failed login</option>
+            <option value="cowrie.login.success">Successful honeypot login</option>
+            <option value="cowrie.command.input">Command observed</option>
+            <option value="cowrie.session.closed">Session closed</option>
+          </select>
+        </label>
+        <label>Risk level
+          <select value={draft.risk_level} onChange={(event) => updateDraft("risk_level", event.target.value)}>
+            <option value="">All levels</option>
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+          </select>
+        </label>
+        <button type="submit" className="filter-button">Search</button>
+      </form>
+      <div className="threat-hunt-results-heading">
+        <span>{loading ? "Searching…" : `${results.total.toLocaleString()} matching events`}</span>
+        <span>Page size: {results.limit}</span>
+      </div>
+      {error ? <div className="attacker-profile-error">{error}</div> : null}
+      {!loading && !error && !results.items.length ? (
+        <div className="attacker-profile-empty">No recorded events match all selected criteria.</div>
+      ) : null}
+      {results.items.length > 0 && (
+        <>
+          <div className="threat-hunt-table-wrap">
+            <table className="threat-hunt-table">
+              <thead>
+                <tr><th>Timestamp</th><th>Source IP</th><th>Event type</th><th>Session</th><th>Username</th><th>Command</th><th>Risk</th></tr>
+              </thead>
+              <tbody>
+                {results.items.map((item, index) => (
+                  <tr key={`${item.timestamp}-${item.session_id}-${index}`}>
+                    <td>{item.timestamp || "—"}</td>
+                    <td>
+                      {item.src_ip ? (
+                        <button type="button" className="threat-hunt-ip" onClick={() => onSelectAttacker(item.src_ip)}>
+                          {item.src_ip}
+                        </button>
+                      ) : "—"}
+                    </td>
+                    <td>{item.event_type || "—"}</td>
+                    <td>{item.session_id || "—"}</td>
+                    <td>{item.username || "—"}</td>
+                    <td className="threat-hunt-command" title={item.command || ""}>{item.command || "—"}</td>
+                    <td>{item.risk_level ? <><RiskBadge level={item.risk_level} /> <small>{item.risk_score}</small></> : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="threat-hunt-pagination">
+            <button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0 || loading}>Previous</button>
+            <span>Page {page + 1} of {Math.max(1, Math.ceil(results.total / results.limit))}</span>
+            <button type="button" onClick={() => setPage((current) => current + 1)} disabled={!results.has_more || loading}>Next</button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 function AttackerMap({ data, filters }) {
 
   const [selectedIp, setSelectedIp] = useState(null);
@@ -2314,6 +2482,14 @@ function AttackerMap({ data, filters }) {
         location of an attacker.
 
       </div>}
+
+      <ThreatHunt
+        filters={filters}
+        onSelectAttacker={(ip) => {
+          preserveUnmappedSelection.current = !data.some((point) => point.src_ip === ip);
+          setSelectedIp(ip);
+        }}
+      />
 
       <section className="attacker-profile-panel campaign-panel">
         <div className="attacker-profile-kicker">CANDIDATE ATTACK CAMPAIGNS</div>

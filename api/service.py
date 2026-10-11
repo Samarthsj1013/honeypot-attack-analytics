@@ -816,6 +816,132 @@ def attacker_incident(src_ip: str, f: Filters, db_path=None) -> dict | None:
         "last_seen": timeline["incident_summary"]["last_seen"],
     }
 
+
+THREAT_HUNT_COLUMNS = [
+    "timestamp", "src_ip", "event_type", "session_id", "username",
+    "command", "risk_score", "risk_level",
+]
+
+
+def threat_hunt(
+    f: Filters,
+    db_path=None,
+    *,
+    src_ip: str | None = None,
+    username: str | None = None,
+    command: str | None = None,
+    event_type: str | None = None,
+    risk_level: str | None = None,
+    limit: int | None = 50,
+    offset: int = 0,
+) -> dict:
+    """Search recorded events, optionally returning a bounded page."""
+    src_ip = src_ip.strip() if src_ip and src_ip.strip() else None
+    username = username.strip() if username and username.strip() else None
+    command = command.strip() if command and command.strip() else None
+    clauses, params = _filters(f, "e.timestamp")
+    clauses.append("e.timestamp IS NOT NULL")
+    if src_ip:
+        clauses.append("e.src_ip = ?")
+        params.append(src_ip)
+    if username:
+        clauses.append("instr(lower(COALESCE(e.username, '')), lower(?)) > 0")
+        params.append(username)
+    if command:
+        clauses.append("instr(lower(COALESCE(e.command, '')), lower(?)) > 0")
+        params.append(command)
+    if event_type:
+        clauses.append("e.eventid = ?")
+        params.append(event_type)
+
+    risk = risk_table(load_sessions(f, db_path))
+    risk_by_ip = {
+        str(row["src_ip"]): {
+            "risk_score": float(row["risk_score"]),
+            "risk_level": str(row["risk_level"]),
+        }
+        for _, row in risk.iterrows()
+    }
+    if risk_level:
+        matching_ips = sorted(
+            ip for ip, values in risk_by_ip.items() if values["risk_level"] == risk_level
+        )
+        if matching_ips:
+            clauses.append(f"e.src_ip IN ({','.join('?' for _ in matching_ips)})")
+            params.extend(matching_ips)
+        else:
+            clauses.append("1 = 0")
+
+    where = " AND ".join(clauses) if clauses else "1 = 1"
+    total_df = database.query(
+        f"""
+        SELECT COUNT(*) AS total
+        FROM events e
+        LEFT JOIN session_clusters c ON e.session = c.session
+        WHERE {where}
+        """,
+        tuple(params),
+        db_path,
+    )
+    total = int(total_df.iloc[0]["total"]) if not total_df.empty else 0
+    paging = ""
+    query_params = list(params)
+    if limit is not None:
+        paging = "LIMIT ? OFFSET ?"
+        query_params.extend((limit, offset))
+    rows = database.query(
+        f"""
+        SELECT e.timestamp, e.src_ip, e.eventid AS event_type,
+               e.session AS session_id, e.username, e.command
+        FROM events e
+        LEFT JOIN session_clusters c ON e.session = c.session
+        WHERE {where}
+        ORDER BY e.timestamp, e.id
+        {paging}
+        """,
+        tuple(query_params),
+        db_path,
+    )
+    result = records(rows)
+    for row in result:
+        values = risk_by_ip.get(str(row["src_ip"]))
+        row["risk_score"] = values["risk_score"] if values else None
+        row["risk_level"] = values["risk_level"] if values else None
+    return {
+        "items": result,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(result) < total,
+    }
+
+
+def csv_safe_cell(value):
+    """Prefix spreadsheet formula-like values so they are imported as text."""
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        return value
+    probe = value.lstrip(" \t\r\n")
+    if probe.startswith(("=", "+", "-", "@")) or value.startswith(("\t", "\r", "\n")):
+        return "'" + value
+    return value
+
+
+def threat_hunt_csv(f: Filters, db_path=None, **criteria) -> str:
+    """Export every matching hunt result as formula-safe CSV."""
+    results = threat_hunt(f, db_path, **criteria, limit=None)
+    import csv
+    from io import StringIO
+
+    output = StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(THREAT_HUNT_COLUMNS)
+    for item in results["items"]:
+        writer.writerow([csv_safe_cell(item.get(column)) for column in THREAT_HUNT_COLUMNS])
+    return output.getvalue()
+
+
 def similar_attackers(src_ip: str, f: Filters, db_path=None, limit: int = 5) -> list[dict] | None:
     """Rank other attackers using normalized Attacker DNA metrics."""
     df = load_sessions(f, db_path)
