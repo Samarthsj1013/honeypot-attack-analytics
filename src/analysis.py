@@ -484,6 +484,114 @@ def correlate_attack_campaigns(sessions: pd.DataFrame) -> list[dict]:
     return sorted(campaigns, key=lambda row: (row["first_seen"] or "", row["campaign_id"]))
 
 
+def reconstruct_incident_timeline(events: pd.DataFrame, event_type: str | None = None) -> dict:
+    """Present stored Cowrie events in order, with an evidence-only summary."""
+    labels = {
+        "cowrie.session.connect": "Session Connected",
+        "cowrie.login.failed": "Failed Honeypot Login",
+        "cowrie.login.success": "Successful Honeypot Login",
+        "cowrie.command.input": "Observed Command",
+        "cowrie.session.closed": "Session Closed",
+    }
+    download_tools_pattern = re.compile(
+        r"\b(wget|curl|ftp|tftp|certutil(?:\.exe)?|bitsadmin(?:\.exe)?|"
+        r"invoke-webrequest|iwr)\b", re.IGNORECASE
+    )
+    if events is None:
+        events = pd.DataFrame()
+    data = events.copy()
+    if "eventid" not in data:
+        data["eventid"] = None
+    if "timestamp" not in data:
+        data["timestamp"] = None
+    if "id" not in data:
+        data["id"] = range(len(data))
+
+    data["_time"] = pd.to_datetime(data["timestamp"], errors="coerce", utc=True)
+    data = data.sort_values(["_time", "id"], kind="stable", na_position="last")
+    all_events = []
+    for _, row in data.iterrows():
+        event_id = str(row.get("eventid") or "")
+        command = row.get("command")
+        command = str(command).strip() if pd.notna(command) else ""
+        matches = sorted({value.lower() for value in download_tools_pattern.findall(command)})
+        evidence = {}
+        for column, label in (("username", "username"), ("src_port", "source_port")):
+            value = row.get(column)
+            if pd.notna(value) and str(value).strip():
+                evidence[label] = str(value)
+        if command:
+            evidence["command"] = command
+        duration = row.get("duration")
+        if pd.notna(duration):
+            evidence["duration_seconds"] = float(duration)
+        if matches:
+            evidence["download_tools"] = matches
+        timestamp = row["_time"]
+        event_pk = row["id"]
+        try:
+            event_pk = int(event_pk) if pd.notna(event_pk) else None
+        except (TypeError, ValueError):
+            event_pk = None
+        all_events.append({
+            "id": event_pk,
+            "timestamp": timestamp.isoformat() if pd.notna(timestamp) else None,
+            "session": str(row.get("session")) if pd.notna(row.get("session")) else None,
+            "eventid": event_id or None,
+            "event_type": labels.get(event_id, event_id or "Unknown Event"),
+            "event_type_filter": event_id or None,
+            "is_download_activity": bool(matches),
+            "evidence": evidence,
+        })
+
+    available = sorted({event["event_type_filter"] for event in all_events if event["event_type_filter"]})
+    if any(event["is_download_activity"] for event in all_events):
+        available.append("download_tool")
+    if event_type == "download_tool":
+        visible = [event for event in all_events if event["is_download_activity"]]
+    elif event_type:
+        visible = [event for event in all_events if event["event_type_filter"] == event_type]
+    else:
+        visible = all_events
+
+    counts = {}
+    for event in all_events:
+        label = event["event_type"]
+        counts[label] = counts.get(label, 0) + 1
+    timestamps = [event["timestamp"] for event in all_events if event["timestamp"]]
+    sessions = sorted({event["session"] for event in all_events if event["session"]})
+    if not all_events:
+        description = "No matching honeypot events were recorded for this attacker and date/behavior filters."
+    else:
+        description = (
+            "Summary of recorded honeypot activity only; it does not establish attacker intent "
+            "or compromise of a real system."
+        )
+    summary = {
+        "scope": (
+            "Includes all events matching the active date and behavior filters; "
+            "independent of the event-type filter applied to the detailed timeline."
+        ),
+        "event_count": len(all_events),
+        "session_count": len(sessions),
+        "first_seen": timestamps[0] if timestamps else None,
+        "last_seen": timestamps[-1] if timestamps else None,
+        "event_counts": [
+            {"event_type": label, "count": count}
+            for label, count in sorted(counts.items())
+        ],
+        "description": description,
+    }
+    return {
+        "timeline_level": "event",
+        "timestamp_precision": "seconds",
+        "events": visible,
+        "available_event_types": available,
+        "incident_summary": summary,
+        "event_count": len(all_events),
+    }
+
+
 def top_credential_pairs(n: int = 10, db_path=None) -> pd.DataFrame:
     """Most common username:password combinations tried."""
     return database.query("""

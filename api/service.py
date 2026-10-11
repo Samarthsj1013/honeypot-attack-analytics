@@ -775,6 +775,47 @@ def attack_campaign_detail(campaign_id: str, f: Filters, db_path=None) -> dict |
             return campaign
     return None
 
+
+def attacker_timeline(
+    src_ip: str,
+    f: Filters,
+    db_path=None,
+    event_type: str | None = None,
+) -> dict | None:
+    """Return filtered event-level records for an attacker in chronological order."""
+    clauses, params = _filters(f, "e.timestamp")
+    where = ["e.src_ip = ?", "e.timestamp IS NOT NULL", *clauses]
+    query = database.query(
+        f"""
+        SELECT e.id, e.timestamp, e.session, e.eventid, e.username,
+               e.command, e.duration, e.src_port
+        FROM events e
+        LEFT JOIN session_clusters c ON e.session = c.session
+        WHERE {" AND ".join(where)}
+        ORDER BY e.timestamp, e.id
+        """,
+        (str(src_ip), *params),
+        db_path,
+    )
+    if query.empty:
+        return None
+    result = analysis.reconstruct_incident_timeline(query, event_type)
+    return {"src_ip": str(src_ip), **result}
+
+
+def attacker_incident(src_ip: str, f: Filters, db_path=None) -> dict | None:
+    """Return the evidence-only incident summary for the filtered event history."""
+    timeline = attacker_timeline(src_ip, f, db_path)
+    if timeline is None:
+        return None
+    return {
+        "src_ip": timeline["src_ip"],
+        "incident_summary": timeline["incident_summary"],
+        "event_count": timeline["event_count"],
+        "first_seen": timeline["incident_summary"]["first_seen"],
+        "last_seen": timeline["incident_summary"]["last_seen"],
+    }
+
 def similar_attackers(src_ip: str, f: Filters, db_path=None, limit: int = 5) -> list[dict] | None:
     """Rank other attackers using normalized Attacker DNA metrics."""
     df = load_sessions(f, db_path)

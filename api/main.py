@@ -229,6 +229,33 @@ def create_app(db_path=None) -> FastAPI:
             )
         return intent
 
+    @router.get("/attackers/{src_ip}/timeline")
+    def attacker_timeline(
+        src_ip: str,
+        f: Filters = Depends(get_filters),
+        event_type: str | None = None,
+    ) -> dict:
+        timeline = service.attacker_timeline(src_ip, f, db_path, event_type)
+        if timeline is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Attacker events not found for the current filters",
+            )
+        return timeline
+
+    @router.get("/attackers/{src_ip}/incident")
+    def attacker_incident(
+        src_ip: str,
+        f: Filters = Depends(get_filters),
+    ) -> dict:
+        incident = service.attacker_incident(src_ip, f, db_path)
+        if incident is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Attacker events not found for the current filters",
+            )
+        return incident
+
     @router.get("/risk-levels")
     def risk_levels(
         f: Filters = Depends(get_filters),

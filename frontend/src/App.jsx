@@ -1828,6 +1828,14 @@ function AttackerMap({ data, filters }) {
 
   const [intentError, setIntentError] = useState("");
 
+  const [attackerTimeline, setAttackerTimeline] = useState(null);
+
+  const [timelineLoading, setTimelineLoading] = useState(false);
+
+  const [timelineError, setTimelineError] = useState("");
+
+  const [timelineEventType, setTimelineEventType] = useState("all");
+
   const [campaigns, setCampaigns] = useState([]);
 
   const [campaignsLoading, setCampaignsLoading] = useState(false);
@@ -2155,6 +2163,46 @@ function AttackerMap({ data, filters }) {
 
     loadIntent();
   }, [selectedIp, filters]);
+
+  useEffect(() => {
+    if (!selectedIp) {
+      setAttackerTimeline(null);
+      setTimelineError("");
+      return;
+    }
+    let active = true;
+    async function loadTimeline() {
+      try {
+        setTimelineLoading(true);
+        setTimelineError("");
+        const params = {};
+        if (filters.start) params.start = filters.start;
+        if (filters.end) params.end = filters.end;
+        if (filters.behavior) params.behavior = filters.behavior;
+        if (timelineEventType !== "all") params.event_type = timelineEventType;
+        const response = await axios.get(
+          `${API}/api/attackers/${encodeURIComponent(selectedIp)}/timeline`,
+          { params }
+        );
+        if (!Array.isArray(response.data?.events)) {
+          throw new Error("Unexpected attacker timeline response");
+        }
+        if (active) setAttackerTimeline(response.data);
+      } catch (err) {
+        console.error("Failed to load attacker timeline:", err);
+        if (active) {
+          setAttackerTimeline(null);
+          setTimelineError("Unable to load the filtered event timeline.");
+        }
+      } finally {
+        if (active) setTimelineLoading(false);
+      }
+    }
+    loadTimeline();
+    return () => {
+      active = false;
+    };
+  }, [selectedIp, filters, timelineEventType]);
 
   return (
 
@@ -2719,6 +2767,91 @@ function AttackerMap({ data, filters }) {
                     <p className="attacker-intent-caveat">
                       {intent.inference_note}
                     </p>
+                  </>
+                ) : null}
+              </section>
+
+              <section className="attacker-timeline-panel">
+                <div className="attacker-timeline-header">
+                  <div>
+                    <div className="attacker-profile-kicker">ATTACK TIMELINE & INCIDENT</div>
+                    <div className="attacker-timeline-caption">
+                      Event timestamps retained to seconds; entries are observed honeypot records.
+                    </div>
+                  </div>
+                  <label className="timeline-filter-label">
+                    EVENT TYPE
+                    <select
+                      value={timelineEventType}
+                      onChange={(event) => setTimelineEventType(event.target.value)}
+                    >
+                      <option value="all">All events</option>
+                      {attackerTimeline?.available_event_types?.filter((eventType) => eventType !== "download_tool").map((eventType) => (
+                        <option value={eventType} key={eventType}>{eventType}</option>
+                      ))}
+                      {attackerTimeline?.available_event_types?.includes("download_tool") && (
+                        <option value="download_tool">Download-tool activity</option>
+                      )}
+                    </select>
+                  </label>
+                </div>
+                {timelineLoading ? (
+                  <div className="attacker-profile-loading">Loading filtered event history…</div>
+                ) : timelineError ? (
+                  <div className="attacker-profile-error">{timelineError}</div>
+                ) : attackerTimeline ? (
+                  <>
+                    <div className="incident-summary">
+                      <strong>INCIDENT SUMMARY</strong>
+                      <p className="incident-summary-scope">
+                        {attackerTimeline.incident_summary.scope}
+                      </p>
+                      <div className="incident-summary-stats">
+                        <span><strong>{attackerTimeline.incident_summary.event_count}</strong> events</span>
+                        <span><strong>{attackerTimeline.incident_summary.session_count}</strong> sessions</span>
+                        <span>
+                          <strong>Time range</strong>
+                          {attackerTimeline.incident_summary.first_seen
+                            ? `${attackerTimeline.incident_summary.first_seen} — ${attackerTimeline.incident_summary.last_seen}`
+                            : "Unavailable"}
+                        </span>
+                      </div>
+                      <div className="incident-event-counts">
+                        {attackerTimeline.incident_summary.event_counts.map((item) => (
+                          <span key={item.event_type}>
+                            {item.event_type}<strong>{item.count}</strong>
+                          </span>
+                        ))}
+                        {!attackerTimeline.incident_summary.event_counts.length && (
+                          <span>No event types in this date/behavior scope.</span>
+                        )}
+                      </div>
+                      <p className="incident-summary-description">
+                        {attackerTimeline.incident_summary.description}
+                      </p>
+                    </div>
+                    {attackerTimeline.events.length ? (
+                      <ol className="attacker-timeline-list">
+                        {attackerTimeline.events.map((item, index) => (
+                          <li key={item.id ?? `${item.session}-${item.timestamp}-${index}`}>
+                            <time>{item.timestamp || "Timestamp unavailable"}</time>
+                            <div className="timeline-event-content">
+                              <strong>{item.event_type}</strong>
+                              {item.is_download_activity && <span className="timeline-download-tag">Download-tool match</span>}
+                              {item.session && <small>Session {item.session}</small>}
+                              {Object.entries(item.evidence || {}).map(([key, value]) => (
+                                <div className="timeline-evidence" key={key}>
+                                  <span>{key.replaceAll("_", " ")}</span>
+                                  <code>{Array.isArray(value) ? value.join(", ") : String(value)}</code>
+                                </div>
+                              ))}
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <div className="attacker-profile-empty">No events match this event-type filter.</div>
+                    )}
                   </>
                 ) : null}
               </section>
