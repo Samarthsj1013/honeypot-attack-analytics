@@ -1,13 +1,26 @@
-"""
-Start the API server (development mode, auto-reload on code changes).
+﻿"""Start the FastAPI server locally or on Render."""
+import os
+import shutil
+from pathlib import Path
 
-Binds to 127.0.0.1 only, so it is reachable from your own machine and nothing else.
-
-Usage:
-    python run_api.py
-Then open http://127.0.0.1:8000/docs
-"""
 import uvicorn
 
+
 if __name__ == "__main__":
-    uvicorn.run("api.main:app", host="127.0.0.1", port=8000, reload=True)
+    base_dir = Path(__file__).resolve().parent
+
+    if os.getenv("RENDER"):
+        seed = base_dir / "deploy" / "honeypot.sqlite3"
+        runtime_db = Path("/tmp/honeypot.db")
+
+        if not seed.is_file():
+            raise FileNotFoundError(f"Database seed not found: {seed}")
+
+        shutil.copy2(seed, runtime_db)
+        os.environ["HONEYPOT_DB_PATH"] = str(runtime_db)
+
+    uvicorn.run(
+        "api.main:app",
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", "8000")),
+    )

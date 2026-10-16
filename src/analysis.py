@@ -805,3 +805,8 @@ def save_table(name: str, df: pd.DataFrame, db_path=None) -> None:
     """Write a DataFrame to SQLite, replacing the table if it exists."""
     with database.get_connection(db_path) as conn:
         df.to_sql(name, conn, if_exists="replace", index=False)
+        if name == "session_clusters":
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_session_clusters_session "
+                "ON session_clusters(session)"
+            )

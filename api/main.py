@@ -8,6 +8,7 @@ Interactive docs:
     http://127.0.0.1:8000/docs
 """
 
+import os
 from datetime import date
 from typing import Literal
 
@@ -16,16 +17,23 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api import service
 from api.service import Filters
+from src import database
 
 
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    *[
+        origin.strip().rstrip("/")
+        for origin in os.getenv("CORS_ORIGINS", "").split(",")
+        if origin.strip()
+    ],
 ]
 
 
 def create_app(db_path=None) -> FastAPI:
     """App factory so tests can point the API at a temporary database."""
+    database.ensure_query_indexes(db_path)
     app = FastAPI(
         title="Honeypot Attack Analytics API",
         version="1.0.0",
@@ -436,4 +444,5 @@ def create_app(db_path=None) -> FastAPI:
     return app
 
 
+# Resolve the configured database path once for the deployed application.
 app = create_app()

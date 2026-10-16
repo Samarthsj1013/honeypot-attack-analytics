@@ -54,6 +54,38 @@ class TestDatabase(unittest.TestCase):
         names = set(t["name"])
         self.assertTrue({"events", "sessions", "ip_intel"}.issubset(names))
 
+    def test_query_indexes_support_timestamp_filters_and_session_joins(self):
+        with database.get_connection(self.db) as connection:
+            connection.execute("CREATE TABLE session_clusters (session TEXT, behavior TEXT)")
+            connection.execute("INSERT INTO session_clusters VALUES (?, ?)", (SID, "Observed"))
+
+        database.ensure_query_indexes(self.db)
+        indexes = set(database.query(
+            "SELECT name FROM sqlite_master WHERE type='index'",
+            db_path=self.db,
+        )["name"])
+        self.assertIn("idx_events_timestamp", indexes)
+        self.assertIn("idx_events_session_timestamp", indexes)
+        self.assertIn("idx_session_clusters_session", indexes)
+        self.assertNotIn("idx_events_session", indexes)
+
+        timestamp_plan = database.query(
+            "EXPLAIN QUERY PLAN SELECT id FROM events "
+            "WHERE timestamp >= ? AND timestamp < ?",
+            ("2026-01-01 00:00:00", "2026-01-02 00:00:00"),
+            self.db,
+        )["detail"].tolist()
+        self.assertTrue(any("idx_events_timestamp" in item for item in timestamp_plan))
+
+        join_plan = database.query(
+            "EXPLAIN QUERY PLAN SELECT e.id FROM events e "
+            "LEFT JOIN session_clusters c ON e.session=c.session "
+            "WHERE e.eventid=?",
+            ("cowrie.login.failed",),
+            self.db,
+        )["detail"].tolist()
+        self.assertTrue(any("idx_session_clusters_session" in item for item in join_plan))
+
     def test_row_counts(self):
         self.assertEqual(
             database.query("SELECT COUNT(*) AS n FROM events", db_path=self.db)["n"][0], 6)

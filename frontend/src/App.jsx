@@ -1,23 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import axios from "axios";
-import AttackGraph from "./AttackGraph";
-
-import {
-
-  MapContainer,
-
-  TileLayer,
-
-  CircleMarker,
-
-  Popup,
-
-  useMap,
-
-} from "react-leaflet";
-
-import "leaflet/dist/leaflet.css";
 
 import {
 
@@ -70,7 +53,35 @@ import {
 
 } from "recharts";
 
-const API = "http://127.0.0.1:8000";
+import { API } from "./api";
+const AttackGraph = lazy(() => import("./AttackGraph"));
+const AttackerMapCanvas = lazy(() => import("./AttackerMapCanvas"));
+const TechniqueIntelligence = lazy(() => import("./TechniqueIntelligence"));
+
+function DeferredModule({ children, fallback, className }) {
+  const [shouldLoad, setShouldLoad] = useState(false);
+  const target = useRef(null);
+
+  useEffect(() => {
+    if (shouldLoad || !target.current) return undefined;
+    if (!("IntersectionObserver" in window)) {
+      setShouldLoad(true);
+      return undefined;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setShouldLoad(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "600px 0px" });
+    observer.observe(target.current);
+    return () => observer.disconnect();
+  }, [shouldLoad]);
+
+  return <div className={className} ref={target}>
+    {shouldLoad ? <Suspense fallback={fallback}>{children}</Suspense> : fallback}
+  </div>;
+}
 
 function KpiCard({ icon, label, value, danger, success }) {
 
@@ -1235,17 +1246,27 @@ function App() {
         </section>
 
         <section id="mitre-techniques" className="dashboard-grid">
-          <TechniqueIntelligence
-            filters={filters}
-            onSelectAttacker={setProfileSelectionRequest}
-          />
+          <DeferredModule
+            className="deferred-technique-module"
+            fallback={<div className="attacker-profile-loading">Technique intelligence loads when this section is near the viewport.</div>}
+          >
+            <TechniqueIntelligence
+              filters={filters}
+              onSelectAttacker={setProfileSelectionRequest}
+            />
+          </DeferredModule>
         </section>
 
         <section id="attack-graph" className="dashboard-grid">
-          <AttackGraph
-            filters={filters}
-            onSelectAttacker={setProfileSelectionRequest}
-          />
+          <DeferredModule
+            className="deferred-graph-module"
+            fallback={<div className="attacker-profile-loading">Attack graph loads when this section is near the viewport.</div>}
+          >
+            <AttackGraph
+              filters={filters}
+              onSelectAttacker={setProfileSelectionRequest}
+            />
+          </DeferredModule>
         </section>
 
         <section className="dashboard-grid">
@@ -1550,155 +1571,6 @@ function SidebarItem({ icon, label, active, href }) {
 
 }
 
-function TechniqueIntelligence({ filters, onSelectAttacker }) {
-  const [techniqueFilter, setTechniqueFilter] = useState("");
-  const [tactic, setTactic] = useState("");
-  const [sourceIp, setSourceIp] = useState("");
-  const [page, setPage] = useState(0);
-  const [selectedTechnique, setSelectedTechnique] = useState("");
-  const [detailOffset, setDetailOffset] = useState(0);
-  const [data, setData] = useState(null);
-  const [detail, setDetail] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [detailError, setDetailError] = useState("");
-  const pageSize = 25;
-  const detailPageSize = 100;
-
-  useEffect(() => {
-    setPage(0);
-    setDetailOffset(0);
-    setSelectedTechnique("");
-  }, [filters, techniqueFilter, tactic, sourceIp]);
-
-  useEffect(() => {
-    let active = true;
-    async function loadTechniques() {
-      try {
-        setLoading(true);
-        setError("");
-        const params = { limit: pageSize, offset: page * pageSize, ...filters };
-        if (!params.start) delete params.start;
-        if (!params.end) delete params.end;
-        if (!params.behavior) delete params.behavior;
-        if (techniqueFilter.trim()) params.technique_id = techniqueFilter.trim();
-        if (tactic) params.tactic = tactic;
-        if (sourceIp.trim()) params.source_ip = sourceIp.trim();
-        const response = await axios.get(`${API}/api/mitre/techniques`, { params });
-        if (!Array.isArray(response.data?.items)) throw new Error("Unexpected technique intelligence response");
-        if (active) setData(response.data);
-      } catch (err) {
-        console.error("Failed to load MITRE technique intelligence:", err);
-        if (active) {
-          setData(null);
-          setError(err.response?.data?.detail || "Unable to load technique intelligence.");
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    loadTechniques();
-    return () => { active = false; };
-  }, [filters, techniqueFilter, tactic, sourceIp, page]);
-
-  useEffect(() => {
-    if (!selectedTechnique) {
-      setDetail(null);
-      return undefined;
-    }
-    let active = true;
-    async function loadDetail() {
-      try {
-        setDetailLoading(true);
-        setDetailError("");
-        const params = { limit: detailPageSize, offset: detailOffset, ...filters };
-        if (!params.start) delete params.start;
-        if (!params.end) delete params.end;
-        if (!params.behavior) delete params.behavior;
-        if (sourceIp.trim()) params.source_ip = sourceIp.trim();
-        const response = await axios.get(
-          `${API}/api/mitre/techniques/${encodeURIComponent(selectedTechnique)}`, { params }
-        );
-        if (!Array.isArray(response.data?.sources)) throw new Error("Unexpected technique detail response");
-        if (active) setDetail(response.data);
-      } catch (err) {
-        console.error("Failed to load technique evidence:", err);
-        if (active) {
-          setDetail(null);
-          setDetailError(err.response?.status === 404
-            ? "No evidence for this technique matches the active filters."
-            : "Unable to load technique evidence.");
-        }
-      } finally {
-        if (active) setDetailLoading(false);
-      }
-    }
-    loadDetail();
-    return () => { active = false; };
-  }, [selectedTechnique, detailOffset, filters, sourceIp]);
-
-  const summary = data?.summary || {};
-  return (
-    <div className="mitre-intelligence">
-      <Panel title="MITRE ATT&CK Technique Intelligence" subtitle="Observed honeypot evidence mapped to a small offline ATT&CK catalog. Mappings are behavioral inferences, not attribution or proof of real-system compromise.">
-        <div className="mitre-summary-grid">
-          {[["Mapped techniques", summary.mapped_techniques], ["Observed tactics", summary.observed_tactics], ["Source IPs", summary.source_ips]].map(([label, value]) => (
-            <div className="source-overview-card" key={label}><span>{label}</span><strong>{loading && !data ? "—" : Number(value || 0).toLocaleString()}</strong></div>
-          ))}
-        </div>
-        <div className="mitre-filter-bar">
-          <label>Technique ID<input value={techniqueFilter} onChange={(event) => setTechniqueFilter(event.target.value)} placeholder="e.g. T1082" /></label>
-          <label>Tactic<select value={tactic} onChange={(event) => setTactic(event.target.value)}>
-            <option value="">All tactics</option>
-            {["Credential Access", "Command and Control", "Discovery", "Execution"].map((value) => <option key={value}>{value}</option>)}
-          </select></label>
-          <label>Source IP<input value={sourceIp} onChange={(event) => setSourceIp(event.target.value)} placeholder="Filter by IP" /></label>
-          {(techniqueFilter || tactic || sourceIp) && <button type="button" onClick={() => { setTechniqueFilter(""); setTactic(""); setSourceIp(""); setPage(0); }}>Clear filters</button>}
-          {loading && <span className="source-loading">Updating mappings…</span>}
-        </div>
-        {error && <div className="error-banner"><AlertTriangle size={18} /><span>{error}</span></div>}
-        {data?.scope_note && <p className="mitre-scope-note">{data.scope_note}</p>}
-        {!error && data && (data.items.length ? <>
-          <div className="table-wrapper mitre-table-wrapper"><table className="source-table mitre-table">
-            <thead><tr><th>TECHNIQUE</th><th>TACTIC</th><th>EVIDENCE EVENTS</th><th>SOURCE IPS</th><th>CONFIDENCE</th></tr></thead>
-            <tbody>{data.items.map((item) => <tr key={item.technique_id} className={selectedTechnique === item.technique_id ? "source-row-selected" : ""}>
-              <td><button type="button" className="mitre-technique-button" onClick={() => { setSelectedTechnique(item.technique_id); setDetailOffset(0); }}><strong>{item.technique_id}</strong><span>{item.name}</span></button></td>
-              <td>{item.tactic}</td><td>{item.event_count.toLocaleString()}</td><td>{item.source_count.toLocaleString()}</td><td><ConfidenceBadge level={item.confidence} /></td>
-            </tr>)}</tbody>
-          </table></div>
-          <div className="source-pagination"><span>{data.total.toLocaleString()} technique mappings · page {page + 1}</span>
-            <button type="button" disabled={page === 0 || loading} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>
-            <button type="button" disabled={!data.has_more || loading} onClick={() => setPage((current) => current + 1)}>Next</button>
-          </div>
-        </> : <EmptyState text="No ATT&CK technique evidence matches these filters." />)}
-        {selectedTechnique && <div className="mitre-detail">
-          {detailLoading ? <div className="attacker-profile-loading">Loading technique evidence…</div>
-            : detailError ? <div className="attacker-profile-error">{detailError}</div>
-              : detail && <>
-                <div className="mitre-detail-heading"><div><span>{detail.technique_id} · {detail.tactic}</span><h3>{detail.name}</h3><a href={detail.official_url} target="_blank" rel="noreferrer">Official MITRE ATT&amp;CK entry</a></div><ConfidenceBadge level={detail.confidence} /></div>
-                <p className="mitre-rationale">{detail.rationale}</p>
-                <div className="mitre-detail-meta"><span>Observed {detail.event_count} matching events</span><span>{detail.first_seen || "Timestamp unavailable"} — {detail.last_seen || "Timestamp unavailable"}</span><span>Confidence: {detail.confidence_rule}</span></div>
-                <div className="mitre-evidence-list"><strong>Recorded evidence examples</strong>{detail.evidence_examples.map((example, index) => <code key={`${example}-${index}`}>{example}</code>)}</div>
-                <div className="table-wrapper"><table className="source-table mitre-source-table">
-                  <thead><tr><th>SOURCE IP</th><th>EVENTS</th><th>SESSIONS</th><th>FIRST / LAST SEEN</th><th>OBSERVED EVIDENCE</th></tr></thead>
-                  <tbody>{detail.sources.map((source) => <tr key={source.src_ip}>
-                    <td><button type="button" className="source-ip-button" onClick={() => onSelectAttacker(source.src_ip)}>{source.src_ip}</button></td>
-                    <td>{source.event_count}</td><td>{source.session_ids.join(", ") || "Unavailable"}</td>
-                    <td>{source.first_seen || "—"}<br />{source.last_seen || "—"}</td><td>{source.evidence_examples.join(" · ") || source.event_types.join(", ")}</td>
-                  </tr>)}</tbody>
-                </table></div>
-                {detail.total_sources > detailPageSize && <div className="source-pagination"><span>{detail.total_sources} source IPs</span>
-                  <button type="button" disabled={detailOffset === 0 || detailLoading} onClick={() => setDetailOffset((current) => Math.max(0, current - detailPageSize))}>Previous</button>
-                  <button type="button" disabled={!detail.has_more || detailLoading} onClick={() => setDetailOffset((current) => current + detailPageSize)}>Next</button>
-                </div>}
-              </>}
-        </div>}
-      </Panel>
-    </div>
-  );
-}
-
 function SourceIntelligence({ filters, selectedAttacker, onSelectAttacker }) {
   const [country, setCountry] = useState("");
   const [riskLevel, setRiskLevel] = useState("");
@@ -1843,214 +1715,6 @@ function SourceIntelligence({ filters, selectedAttacker, onSelectAttacker }) {
       )}
     </div>
   );
-}
-
-/* =========================================================
-
-   MAP
-
-   ========================================================= */
-
-function FocusMarker({
-
-  point,
-
-  sessions,
-
-  failed,
-
-  selected,
-
-  onSelect,
-
-}) {
-
-  const map = useMap();
-
-  const latitude = Number(point.latitude);
-
-  const longitude = Number(point.longitude);
-
-  const baseRadius = Math.max(
-
-    5,
-
-    Math.min(15, 5 + Math.sqrt(sessions) * 1.05)
-
-  );
-
-  const radius = selected
-
-    ? Math.min(baseRadius + 4, 19)
-
-    : baseRadius;
-
-  const riskLevel = String(point.risk_level || "Unknown");
-
-  const riskColors = {
-
-    High: {
-
-      color: "#ef4444",
-
-      glow: "#f87171",
-
-    },
-
-    Medium: {
-
-      color: "#f59e0b",
-
-      glow: "#fbbf24",
-
-    },
-
-    Low: {
-
-      color: "#22c55e",
-
-      glow: "#4ade80",
-
-    },
-
-    Unknown: {
-
-      color: "#64748b",
-
-      glow: "#94a3b8",
-
-    },
-
-  };
-
-  const riskColor = riskColors[riskLevel] || riskColors.Low;
-
-  const handleClick = () => {
-
-    onSelect(point.src_ip);
-
-    map.flyTo(
-
-      [latitude, longitude],
-
-      Math.max(map.getZoom(), 4),
-
-      {
-
-        duration: 0.8,
-
-      }
-
-    );
-
-  };
-
-  return (
-
-    <CircleMarker
-
-      center={[latitude, longitude]}
-
-      radius={radius}
-
-      eventHandlers={{
-
-        click: handleClick,
-
-      }}
-
-      pathOptions={{
-
-        color: selected ? "#ffffff" : riskColor.glow,
-
-        fillColor: riskColor.color,
-
-        fillOpacity: selected ? 0.95 : 0.78,
-
-        weight: selected ? 3 : 1.5,
-
-      }}
-
-    >
-
-      <Popup>
-
-        <div className="map-popup">
-
-          <div className="map-popup-header">
-
-            <div className="map-popup-ip">
-
-              {point.src_ip}
-
-            </div>
-
-            <span
-
-              className="map-popup-risk"
-
-              style={{
-
-                borderColor: riskColor.color,
-
-                color: riskColor.color,
-
-              }}
-
-            >
-
-              {riskLevel}
-
-            </span>
-
-          </div>
-
-          <div className="map-popup-location">
-
-            {point.city && point.country
-
-              ? `${point.city}, ${point.country}`
-
-              : point.country || "Unknown location"}
-
-          </div>
-
-          <div className="map-popup-divider" />
-
-          <div className="map-popup-stat-grid">
-
-            <div>
-
-              <span>ATTACK EVENTS</span>
-
-              <strong>{Number(point.total_events ?? sessions).toLocaleString()}</strong>
-
-            </div>
-
-            <div>
-
-              <span>FAILED LOGINS</span>
-
-              <strong>{failed.toLocaleString()}</strong>
-
-            </div>
-
-          </div>
-
-          <div className="map-popup-note">
-
-            Approximate IP geolocation
-
-          </div>
-
-        </div>
-
-      </Popup>
-
-    </CircleMarker>
-
-  );
-
 }
 
 function ThreatHunt({ filters, onSelectAttacker }) {
@@ -2875,62 +2539,17 @@ function AttackerMap({ data, filters, selectedAttacker = "" }) {
 
     <div className="attacker-map">
 
-      {data.length ? <MapContainer
-
-        center={[20, 0]}
-
-        zoom={2}
-
-        minZoom={2}
-
-        maxZoom={7}
-
-        scrollWheelZoom={true}
-
-        worldCopyJump={true}
-
-        className="attacker-map-container"
-
+      {data.length ? <DeferredModule
+        className="deferred-map-module"
+        fallback={<div className="attacker-profile-loading">Loading interactive map?</div>}
       >
-
-        <TileLayer
-          attribution="&copy; OpenStreetMap contributors"
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          eventHandlers={{
-            tileerror: () => setTileUnavailable(true),
-            tileload: () => setTileUnavailable(false),
-          }}
+        <AttackerMapCanvas
+          data={data}
+          selectedIp={selectedIp}
+          onSelect={setSelectedIp}
+          onTileStatus={setTileUnavailable}
         />
-
-        {data.map((point) => {
-
-          const sessions = Number(point.total_events ?? point.sessions ?? 0);
-
-          const failed = Number(point.failed_logins || 0);
-
-          return (
-
-            <FocusMarker
-
-              key={point.src_ip}
-
-              point={point}
-
-              sessions={sessions}
-
-              failed={failed}
-
-              selected={selectedIp === point.src_ip}
-
-              onSelect={setSelectedIp}
-
-            />
-
-          );
-
-        })}
-
-      </MapContainer> : <EmptyState text="No geolocation data for this filter." />}
+      </DeferredModule> : <EmptyState text="No geolocation data for this filter." />}
 
       {data.length > 0 && tileUnavailable && (
         <div className="map-basemap-warning">

@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS ip_intel (
     longitude     REAL
 );
 
-CREATE INDEX IF NOT EXISTS idx_events_session ON events(session);
+CREATE INDEX IF NOT EXISTS idx_events_session_timestamp ON events(session, timestamp);
+CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_events_ip      ON events(src_ip);
 CREATE INDEX IF NOT EXISTS idx_events_type    ON events(eventid);
 CREATE INDEX IF NOT EXISTS idx_sessions_ip    ON sessions(src_ip);
@@ -83,6 +84,32 @@ def init_db(reset: bool = False, db_path=None) -> None:
             for table in ("events", "sessions", "ip_intel"):
                 conn.execute(f"DROP TABLE IF EXISTS {table}")
         conn.executescript(SCHEMA)
+
+
+def ensure_query_indexes(db_path=None) -> None:
+    """Create query indexes on existing databases without rebuilding their data."""
+    path = Path(db_path) if db_path else config.DB_PATH
+    if not path.exists():
+        return
+    with get_connection(path) as conn:
+        tables = {row[0] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )}
+        if "events" in tables:
+            conn.execute("DROP INDEX IF EXISTS idx_events_session")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_events_session_timestamp "
+                "ON events(session, timestamp)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_events_timestamp "
+                "ON events(timestamp)"
+            )
+        if "session_clusters" in tables:
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_session_clusters_session "
+                "ON session_clusters(session)"
+            )
 
 
 def _append(table: str, df: pd.DataFrame, db_path=None) -> None:

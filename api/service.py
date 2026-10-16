@@ -7,6 +7,7 @@ Query layer for the API. Every public function returns plain, JSON-safe data
 """
 
 from dataclasses import dataclass
+from datetime import date, timedelta
 from hashlib import sha256
 
 from pathlib import Path
@@ -109,15 +110,15 @@ def _filters(f: Filters, ts_col: str) -> tuple[list[str], list]:
 
     if f.start:
 
-        clauses.append(f"date({ts_col}) >= ?")
+        clauses.append(f"{ts_col} >= ?")
 
-        params.append(f.start)
+        params.append(f"{f.start} 00:00:00")
 
     if f.end:
 
-        clauses.append(f"date({ts_col}) <= ?")
+        clauses.append(f"{ts_col} < ?")
 
-        params.append(f.end)
+        params.append(f"{(date.fromisoformat(f.end) + timedelta(days=1)).isoformat()} 00:00:00")
 
     if f.behaviors is not None:
 
