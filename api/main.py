@@ -1,3 +1,4 @@
+
 """
 FastAPI app exposing the honeypot analytics as JSON.
 
@@ -10,10 +11,12 @@ Interactive docs:
 
 import os
 from datetime import date
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from api import service
 from api.service import Filters
@@ -32,8 +35,10 @@ ALLOWED_ORIGINS = [
 
 
 def create_app(db_path=None) -> FastAPI:
-    """App factory so tests can point the API at a temporary database."""
+    """Create the application, optionally using a test database."""
+
     database.ensure_query_indexes(db_path)
+
     app = FastAPI(
         title="Honeypot Attack Analytics API",
         version="1.0.0",
@@ -106,28 +111,16 @@ def create_app(db_path=None) -> FastAPI:
         )
 
     @router.get("/timeline")
-    def timeline(
-        f: Filters = Depends(get_filters),
-    ) -> list[dict]:
-        return service.timeline(
-            service.load_sessions(f, db_path)
-        )
+    def timeline(f: Filters = Depends(get_filters)) -> list[dict]:
+        return service.timeline(service.load_sessions(f, db_path))
 
     @router.get("/hourly")
-    def hourly(
-        f: Filters = Depends(get_filters),
-    ) -> list[dict]:
-        return service.hourly(
-            service.load_sessions(f, db_path)
-        )
+    def hourly(f: Filters = Depends(get_filters)) -> list[dict]:
+        return service.hourly(service.load_sessions(f, db_path))
 
     @router.get("/behaviors")
-    def behaviors(
-        f: Filters = Depends(get_filters),
-    ) -> list[dict]:
-        return service.behaviors(
-            service.load_sessions(f, db_path)
-        )
+    def behaviors(f: Filters = Depends(get_filters)) -> list[dict]:
+        return service.behaviors(service.load_sessions(f, db_path))
 
     @router.get("/countries")
     def countries(
@@ -140,12 +133,8 @@ def create_app(db_path=None) -> FastAPI:
         )
 
     @router.get("/map")
-    def map_points(
-        f: Filters = Depends(get_filters),
-    ) -> list[dict]:
-        return service.map_points(
-            service.load_sessions(f, db_path)
-        )
+    def map_points(f: Filters = Depends(get_filters)) -> list[dict]:
+        return service.map_points(service.load_sessions(f, db_path))
 
     @router.get("/attackers")
     def attackers(
@@ -165,14 +154,26 @@ def create_app(db_path=None) -> FastAPI:
         limit: int = Query(25, ge=1, le=100),
         offset: int = Query(0, ge=0),
         sort_by: Literal[
-            "src_ip", "country", "city", "total_events", "failed_logins",
-            "successful_sessions", "risk_score", "last_seen",
+            "src_ip",
+            "country",
+            "city",
+            "total_events",
+            "failed_logins",
+            "successful_sessions",
+            "risk_score",
+            "last_seen",
         ] = "total_events",
         sort_order: Literal["asc", "desc"] = "desc",
     ) -> dict:
         return service.source_intelligence(
-            f, db_path, country=country, risk_level=risk_level,
-            limit=limit, offset=offset, sort_by=sort_by, sort_order=sort_order,
+            f,
+            db_path,
+            country=country,
+            risk_level=risk_level,
+            limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
 
     @router.get("/mitre/techniques")
@@ -180,15 +181,23 @@ def create_app(db_path=None) -> FastAPI:
         f: Filters = Depends(get_filters),
         technique_id: str | None = Query(default=None, max_length=16),
         tactic: Literal[
-            "Credential Access", "Command and Control", "Discovery", "Execution",
+            "Credential Access",
+            "Command and Control",
+            "Discovery",
+            "Execution",
         ] | None = None,
         source_ip: str | None = Query(default=None, max_length=45),
         limit: int = Query(25, ge=1, le=100),
         offset: int = Query(0, ge=0),
     ) -> dict:
         return service.technique_intelligence(
-            f, db_path, technique_id=technique_id, tactic=tactic,
-            source_ip=source_ip, limit=limit, offset=offset,
+            f,
+            db_path,
+            technique_id=technique_id,
+            tactic=tactic,
+            source_ip=source_ip,
+            limit=limit,
+            offset=offset,
         )
 
     @router.get("/mitre/techniques/{technique_id}")
@@ -200,14 +209,20 @@ def create_app(db_path=None) -> FastAPI:
         offset: int = Query(0, ge=0),
     ) -> dict:
         detail = service.technique_detail(
-            technique_id, f, db_path, source_ip=source_ip,
-            limit=limit, offset=offset,
+            technique_id,
+            f,
+            db_path,
+            source_ip=source_ip,
+            limit=limit,
+            offset=offset,
         )
+
         if detail is None:
             raise HTTPException(
                 status_code=404,
                 detail="Technique evidence not found for the current filters",
             )
+
         return detail
 
     @router.get("/threat-hunt")
@@ -228,8 +243,15 @@ def create_app(db_path=None) -> FastAPI:
         offset: int = Query(0, ge=0),
     ) -> dict:
         return service.threat_hunt(
-            f, db_path, src_ip=src_ip, username=username, command=command,
-            event_type=event_type, risk_level=risk_level, limit=limit, offset=offset,
+            f,
+            db_path,
+            src_ip=src_ip,
+            username=username,
+            command=command,
+            event_type=event_type,
+            risk_level=risk_level,
+            limit=limit,
+            offset=offset,
         )
 
     @router.get("/threat-hunt/export")
@@ -248,13 +270,22 @@ def create_app(db_path=None) -> FastAPI:
         risk_level: Literal["Low", "Medium", "High"] | None = None,
     ) -> Response:
         csv_data = service.threat_hunt_csv(
-            f, db_path, src_ip=src_ip, username=username, command=command,
-            event_type=event_type, risk_level=risk_level,
+            f,
+            db_path,
+            src_ip=src_ip,
+            username=username,
+            command=command,
+            event_type=event_type,
+            risk_level=risk_level,
         )
+
         return Response(
             content=csv_data,
             media_type="text/csv",
-            headers={"Content-Disposition": 'attachment; filename="threat-hunt-results.csv"'},
+            headers={
+                "Content-Disposition":
+                    'attachment; filename="threat-hunt-results.csv"'
+            },
         )
 
     @router.get("/alerts")
@@ -272,8 +303,13 @@ def create_app(db_path=None) -> FastAPI:
         offset: int = Query(0, ge=0),
     ) -> dict:
         return service.threat_alerts(
-            f, db_path, severity=severity, rule_id=rule_id,
-            source_ip=source_ip, limit=limit, offset=offset,
+            f,
+            db_path,
+            severity=severity,
+            rule_id=rule_id,
+            source_ip=source_ip,
+            limit=limit,
+            offset=offset,
         )
 
     @router.get("/alerts/{alert_id}")
@@ -282,11 +318,13 @@ def create_app(db_path=None) -> FastAPI:
         f: Filters = Depends(get_filters),
     ) -> dict:
         alert = service.threat_alert_detail(alert_id, f, db_path)
+
         if alert is None:
             raise HTTPException(
                 status_code=404,
                 detail="Alert not found for the current date and behavior filters",
             )
+
         return alert
 
     @router.get("/attack-graph")
@@ -297,13 +335,15 @@ def create_app(db_path=None) -> FastAPI:
         limit: int = Query(120, ge=1, le=200),
     ) -> dict:
         return service.attack_graph(
-            f, db_path, source_ip=source_ip, session_id=session_id, limit=limit,
+            f,
+            db_path,
+            source_ip=source_ip,
+            session_id=session_id,
+            limit=limit,
         )
 
     @router.get("/campaigns")
-    def attack_campaigns(
-        f: Filters = Depends(get_filters),
-    ) -> list[dict]:
+    def attack_campaigns(f: Filters = Depends(get_filters)) -> list[dict]:
         return service.attack_campaigns(f, db_path)
 
     @router.get("/campaigns/{campaign_id}")
@@ -312,8 +352,13 @@ def create_app(db_path=None) -> FastAPI:
         f: Filters = Depends(get_filters),
     ) -> dict:
         campaign = service.attack_campaign_detail(campaign_id, f, db_path)
+
         if campaign is None:
-            raise HTTPException(status_code=404, detail="Candidate campaign not found for the current filters")
+            raise HTTPException(
+                status_code=404,
+                detail="Candidate campaign not found for the current filters",
+            )
+
         return campaign
 
     @router.get("/attackers/{src_ip}")
@@ -321,11 +366,7 @@ def create_app(db_path=None) -> FastAPI:
         src_ip: str,
         f: Filters = Depends(get_filters),
     ) -> dict:
-        profile = service.attacker_detail(
-            src_ip,
-            f,
-            db_path,
-        )
+        profile = service.attacker_detail(src_ip, f, db_path)
 
         if profile is None:
             raise HTTPException(
@@ -340,11 +381,7 @@ def create_app(db_path=None) -> FastAPI:
         src_ip: str,
         f: Filters = Depends(get_filters),
     ) -> dict:
-        dna = service.attacker_dna(
-            src_ip,
-            f,
-            db_path,
-        )
+        dna = service.attacker_dna(src_ip, f, db_path)
 
         if dna is None:
             raise HTTPException(
@@ -367,15 +404,24 @@ def create_app(db_path=None) -> FastAPI:
         offset: int = Query(0, ge=0),
     ) -> list[dict]:
         matches = service.similar_attackers(
-            src_ip, f, db_path, limit=limit, offset=offset,
-            min_similarity=min_similarity, risk_level=risk_level, search=search,
-            sort_by=sort_by, sort_order=sort_order,
+            src_ip,
+            f,
+            db_path,
+            limit=limit,
+            offset=offset,
+            min_similarity=min_similarity,
+            risk_level=risk_level,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
+
         if matches is None:
             raise HTTPException(
                 status_code=404,
                 detail="Attacker IP not found for the current filters",
             )
+
         return matches
 
     @router.get("/attackers/{src_ip}/intent")
@@ -384,11 +430,13 @@ def create_app(db_path=None) -> FastAPI:
         f: Filters = Depends(get_filters),
     ) -> dict:
         intent = service.attacker_intent(src_ip, f, db_path)
+
         if intent is None:
             raise HTTPException(
                 status_code=404,
                 detail="Attacker IP not found for the current filters",
             )
+
         return intent
 
     @router.get("/attackers/{src_ip}/timeline")
@@ -397,13 +445,20 @@ def create_app(db_path=None) -> FastAPI:
         f: Filters = Depends(get_filters),
         event_type: str | None = None,
     ) -> dict:
-        timeline = service.attacker_timeline(src_ip, f, db_path, event_type)
-        if timeline is None:
+        timeline_data = service.attacker_timeline(
+            src_ip,
+            f,
+            db_path,
+            event_type,
+        )
+
+        if timeline_data is None:
             raise HTTPException(
                 status_code=404,
                 detail="Attacker events not found for the current filters",
             )
-        return timeline
+
+        return timeline_data
 
     @router.get("/attackers/{src_ip}/incident")
     def attacker_incident(
@@ -411,20 +466,18 @@ def create_app(db_path=None) -> FastAPI:
         f: Filters = Depends(get_filters),
     ) -> dict:
         incident = service.attacker_incident(src_ip, f, db_path)
+
         if incident is None:
             raise HTTPException(
                 status_code=404,
                 detail="Attacker events not found for the current filters",
             )
+
         return incident
 
     @router.get("/risk-levels")
-    def risk_levels(
-        f: Filters = Depends(get_filters),
-    ) -> list[dict]:
-        return service.risk_levels(
-            service.load_sessions(f, db_path)
-        )
+    def risk_levels(f: Filters = Depends(get_filters)) -> list[dict]:
+        return service.risk_levels(service.load_sessions(f, db_path))
 
     @router.get("/credentials")
     def credentials(
@@ -439,7 +492,19 @@ def create_app(db_path=None) -> FastAPI:
             db_path,
         )
 
+    # Register the API routes before mounting the frontend.
     app.include_router(router)
+
+    frontend_dist = (
+        Path(__file__).resolve().parents[1] / "frontend" / "dist"
+    )
+
+    if (frontend_dist / "index.html").is_file():
+        app.mount(
+            "/",
+            StaticFiles(directory=str(frontend_dist), html=True),
+            name="frontend",
+        )
 
     return app
 

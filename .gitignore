@@ -17,3 +17,5 @@ data/processed/
 .DS_Store   
 Thumbs.db
 .venv/
+
+deploy/honeypot.tmp
